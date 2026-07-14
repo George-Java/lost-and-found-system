@@ -86,7 +86,7 @@ public class ClaimController {
         return ApiResponse.success(claimMapper.findList("PENDING"));
     }
 
-    @LoginRequired
+    @LoginRequired(adminOnly = true)
     @PutMapping("/{id}/review")
     public ApiResponse<Void> review(@PathVariable Long id, @RequestBody @Valid ClaimReviewRequest request) {
         ClaimRecord claim = claimMapper.findById(id);
@@ -101,11 +101,6 @@ public class ClaimController {
         if (item == null) {
             throw new BusinessException(404, "Item not found");
         }
-        boolean canReview = "ADMIN".equals(AuthContext.role()) || item.getPublisherId().equals(AuthContext.userId());
-        if (!canReview) {
-            throw new BusinessException(403, "No permission to review this claim");
-        }
-
         String status = normalizeStatus(request.getStatus(), false);
         if ("PENDING".equals(status)) {
             throw new BusinessException(400, "Review status must be APPROVED or REJECTED");

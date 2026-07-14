@@ -13,6 +13,7 @@ import com.example.lostfound.mapper.UserMapper;
 import com.example.lostfound.util.PasswordUtil;
 import com.example.lostfound.vo.LoginVO;
 import com.example.lostfound.vo.UserVO;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -56,10 +57,21 @@ public class AuthController {
         if (user == null || !PasswordUtil.matches(request.getPassword(), user.getPasswordHash())) {
             throw new BusinessException(401, "Username or password is invalid");
         }
+        if (PasswordUtil.needsRehash(user.getPasswordHash())) {
+            user.setPasswordHash(PasswordUtil.encode(request.getPassword()));
+            userMapper.updateById(user);
+        }
 
         String token = sessionStore.create(new SessionUser(user.getId(), user.getUsername(), user.getRole()));
         LoginVO vo = new LoginVO(token, user.getId(), user.getUsername(), user.getRole(), user.getRealName());
         return ApiResponse.success(vo);
+    }
+
+    @LoginRequired
+    @PostMapping("/logout")
+    public ApiResponse<Void> logout(HttpServletRequest request) {
+        sessionStore.remove(extractToken(request.getHeader("Authorization")));
+        return ApiResponse.success();
     }
 
     @LoginRequired
@@ -70,5 +82,15 @@ public class AuthController {
             throw new BusinessException(404, "User not found");
         }
         return ApiResponse.success(new UserVO(user.getId(), user.getUsername(), user.getRealName(), user.getPhone(), user.getRole()));
+    }
+
+    private String extractToken(String authHeader) {
+        if (authHeader == null || authHeader.isBlank()) {
+            return null;
+        }
+        if (authHeader.startsWith("Bearer ") && authHeader.length() > 7) {
+            return authHeader.substring(7);
+        }
+        return null;
     }
 }

@@ -1,37 +1,44 @@
 <script setup>
 import { onMounted, reactive } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import http from '../api/http'
 import { parseUrlList } from '../utils/image'
-import { itemStatusText, itemTypeText } from '../utils/status'
+import { itemStatusText, itemTypeText, tagTypeForItemStatus, tagTypeForItemType } from '../utils/status'
 
-const state = reactive({ records: [], loading: false })
+const state = reactive({ records: [], loading: false, operating: false })
 
 async function load() {
   state.loading = true
   try {
     state.records = await http.get('/items/mine')
   } catch (err) {
-    alert(err.message)
+    ElMessage.error(err.message)
   } finally {
     state.loading = false
   }
 }
 
-async function closeItem(id) {
+async function updateStatus(id, action) {
+  const text = action === 'close' ? '关闭' : '重新开放'
   try {
-    await http.put(`/items/${id}/close`)
-    await load()
-  } catch (err) {
-    alert(err.message)
+    await ElMessageBox.confirm(`确认${text}该物品？`, '操作确认', {
+      confirmButtonText: text,
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
   }
-}
 
-async function openItem(id) {
+  state.operating = true
   try {
-    await http.put(`/items/${id}/open`)
+    await http.put(`/items/${id}/${action}`)
+    ElMessage.success('操作成功')
     await load()
   } catch (err) {
-    alert(err.message)
+    ElMessage.error(err.message)
+  } finally {
+    state.operating = false
   }
 }
 
@@ -43,28 +50,56 @@ onMounted(load)
 </script>
 
 <template>
-  <section class="card">
-    <div class="section-title">
-      <h2>我发布的物品</h2>
+  <section>
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">我发布的物品</h1>
+        <p class="page-subtitle">管理自己发布的寻物或招领信息，可关闭或重新开放。</p>
+      </div>
+      <el-button type="primary" @click="$router.push('/items/create')">
+        <el-icon><Plus /></el-icon>
+        发布物品
+      </el-button>
     </div>
-    <div v-if="state.loading" class="empty">加载中...</div>
-    <div v-else-if="!state.records.length" class="empty">你还没有发布任何物品</div>
-    <div v-else class="item-grid">
-      <article v-for="item in state.records" :key="item.id" class="card">
-        <img v-if="firstImage(item)" :src="firstImage(item)" class="preview-img" alt="item image" />
-        <div v-else class="preview-img preview-placeholder">暂无图片</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;">
-          <span class="badge">{{ itemTypeText(item.itemType) }}</span>
-          <span class="badge badge-warm">{{ itemStatusText(item.status) }}</span>
-        </div>
-        <h3 style="margin:0 0 8px;">{{ item.title }}</h3>
-        <p>{{ item.description || '暂无描述' }}</p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <RouterLink class="btn btn-primary" :to="`/items/${item.id}`">查看详情</RouterLink>
-          <button v-if="item.status !== 'CLOSED'" class="btn btn-danger" @click="closeItem(item.id)">关闭物品</button>
-          <button v-else class="btn btn-secondary" @click="openItem(item.id)">重新开放</button>
-        </div>
-      </article>
-    </div>
+
+    <section class="panel">
+      <el-skeleton v-if="state.loading" :rows="6" animated />
+      <el-empty v-else-if="!state.records.length" description="你还没有发布任何物品" />
+      <div v-else class="item-grid">
+        <el-card v-for="item in state.records" :key="item.id" class="item-card" shadow="hover">
+          <img v-if="firstImage(item)" :src="firstImage(item)" class="item-image" alt="物品图片" />
+          <div v-else class="image-placeholder">暂无图片</div>
+          <div class="card-body">
+            <div class="tag-row">
+              <el-tag :type="tagTypeForItemType(item.itemType)">{{ itemTypeText(item.itemType) }}</el-tag>
+              <el-tag :type="tagTypeForItemStatus(item.status)" effect="plain">{{ itemStatusText(item.status) }}</el-tag>
+            </div>
+            <h3 class="card-title">{{ item.title }}</h3>
+            <el-text class="muted" line-clamp="2">{{ item.description || '暂无描述' }}</el-text>
+            <div class="action-row">
+              <el-button type="primary" plain @click="$router.push(`/items/${item.id}`)">详情</el-button>
+              <el-button
+                v-if="item.status !== 'CLOSED'"
+                type="danger"
+                plain
+                :loading="state.operating"
+                @click="updateStatus(item.id, 'close')"
+              >
+                关闭
+              </el-button>
+              <el-button
+                v-else
+                type="success"
+                plain
+                :loading="state.operating"
+                @click="updateStatus(item.id, 'open')"
+              >
+                重新开放
+              </el-button>
+            </div>
+          </div>
+        </el-card>
+      </div>
+    </section>
   </section>
 </template>

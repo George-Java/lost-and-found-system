@@ -1,10 +1,8 @@
 package com.example.lostfound.config;
 
-import com.example.lostfound.auth.AuthInterceptor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -14,17 +12,10 @@ import java.nio.file.Paths;
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
 
-    private final AuthInterceptor authInterceptor;
     private final String uploadDir;
 
-    public WebMvcConfig(AuthInterceptor authInterceptor, @Value("${lostfound.upload-dir:uploads}") String uploadDir) {
-        this.authInterceptor = authInterceptor;
+    public WebMvcConfig(@Value("${lostfound.upload-dir:uploads}") String uploadDir) {
         this.uploadDir = uploadDir;
-    }
-
-    @Override
-    public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(authInterceptor).addPathPatterns("/**");
     }
 
     @Override

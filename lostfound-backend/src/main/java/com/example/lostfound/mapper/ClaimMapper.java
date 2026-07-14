@@ -1,9 +1,9 @@
 package com.example.lostfound.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.example.lostfound.entity.ClaimRecord;
-import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Mapper
-public interface ClaimMapper {
+public interface ClaimMapper extends BaseMapper<ClaimRecord> {
 
     String BASE_SELECT = """
             select
@@ -34,13 +34,6 @@ public interface ClaimMapper {
             left join user_account u on c.claimant_id = u.id
             left join lost_item i on c.item_id = i.id
             """;
-
-    @Insert("""
-            insert into claim_record(item_id, claimant_id, claim_reason, proof_description, proof_images, status)
-            values(#{itemId}, #{claimantId}, #{claimReason}, #{proofDescription}, #{proofMaterials}, #{status})
-            """)
-    @Options(useGeneratedKeys = true, keyProperty = "id")
-    int insert(ClaimRecord claimRecord);
 
     @Select(BASE_SELECT + " where c.id = #{id} limit 1")
     ClaimRecord findById(@Param("id") Long id);
@@ -66,11 +59,13 @@ public interface ClaimMapper {
             """)
     List<ClaimRecord> findList(@Param("status") String status);
 
-    @Select("select count(1) from claim_record")
-    long countAll();
+    default long countAll() {
+        return selectCount(Wrappers.<ClaimRecord>lambdaQuery());
+    }
 
-    @Select("select count(1) from claim_record where status = #{status}")
-    long countByStatus(@Param("status") String status);
+    default long countByStatus(String status) {
+        return selectCount(Wrappers.<ClaimRecord>lambdaQuery().eq(ClaimRecord::getStatus, status));
+    }
 
     @Update("""
             update claim_record

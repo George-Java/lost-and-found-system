@@ -2,7 +2,7 @@ import axios from 'axios'
 import { useAuthStore } from '../stores/auth'
 
 const http = axios.create({
-  baseURL: 'http://localhost:8080/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 10000
 })
 
@@ -22,7 +22,10 @@ http.interceptors.response.use(
     }
     return payload.data
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    const payload = error.response?.data
+    return Promise.reject(new Error(payload?.message || error.message || 'Request failed'))
+  }
 )
 
 export default http

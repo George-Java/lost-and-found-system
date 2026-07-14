@@ -1,8 +1,9 @@
 <script setup>
 import { onMounted, reactive } from 'vue'
+import { ElMessage } from 'element-plus'
 import http from '../api/http'
-import { claimStatusText } from '../utils/status'
 import { parseUrlList } from '../utils/image'
+import { claimStatusText, tagTypeForClaimStatus } from '../utils/status'
 
 const state = reactive({ records: [], loading: false })
 
@@ -11,7 +12,7 @@ async function load() {
   try {
     state.records = await http.get('/claims/mine')
   } catch (err) {
-    alert(err.message)
+    ElMessage.error(err.message)
   } finally {
     state.loading = false
   }
@@ -37,55 +38,57 @@ onMounted(load)
 </script>
 
 <template>
-  <section class="card">
-    <div class="section-title">
-      <h2>我的认领</h2>
+  <section>
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">我的认领</h1>
+        <p class="page-subtitle">查看自己提交的认领申请、审核结果和证明材料。</p>
+      </div>
+      <el-button @click="load">
+        <el-icon><Refresh /></el-icon>
+        刷新
+      </el-button>
     </div>
-    <div v-if="state.loading" class="empty">加载中...</div>
-    <div v-else-if="!state.records.length" class="empty">你还没有提交任何认领</div>
-    <div v-else class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>认领ID</th>
-            <th>物品</th>
-            <th>认领原因</th>
-            <th>状态</th>
-            <th>审核备注</th>
-            <th>证明材料</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in state.records" :key="row.id">
-            <td>{{ row.id }}</td>
-            <td>
-              <div>{{ row.itemTitle || `物品 #${row.itemId}` }}</div>
-              <RouterLink :to="`/items/${row.itemId}`">查看详情</RouterLink>
-            </td>
-            <td>
-              <div>{{ row.claimReason }}</div>
-              <div style="color:#667085;margin-top:6px;">{{ row.proofDescription || '未填写补充说明' }}</div>
-            </td>
-            <td>{{ claimStatusText(row.status) }}</td>
-            <td>{{ row.reviewNote || '-' }}</td>
-            <td>
-              <div v-if="proofMaterials(row).length" class="material-list">
-                <a
-                  v-for="url in proofMaterials(row)"
-                  :key="url"
-                  :href="url"
-                  target="_blank"
-                  rel="noreferrer"
-                  class="material-link"
-                >
-                  {{ isImage(url) ? '查看图片材料' : `下载 ${fileName(url)}` }}
-                </a>
-              </div>
-              <span v-else>-</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+
+    <section class="panel">
+      <el-table v-loading="state.loading" :data="state.records" empty-text="你还没有提交任何认领" border>
+        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column label="物品" min-width="170">
+          <template #default="{ row }">
+            <div>{{ row.itemTitle || `物品 #${row.itemId}` }}</div>
+            <el-button link type="primary" @click="$router.push(`/items/${row.itemId}`)">查看详情</el-button>
+          </template>
+        </el-table-column>
+        <el-table-column label="认领原因" min-width="260">
+          <template #default="{ row }">
+            <div>{{ row.claimReason }}</div>
+            <el-text class="muted">{{ row.proofDescription || '未填写补充说明' }}</el-text>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="110">
+          <template #default="{ row }">
+            <el-tag :type="tagTypeForClaimStatus(row.status)">{{ claimStatusText(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="reviewNote" label="审核备注" min-width="160" />
+        <el-table-column label="证明材料" min-width="170">
+          <template #default="{ row }">
+            <div v-if="proofMaterials(row).length" class="material-list">
+              <a
+                v-for="url in proofMaterials(row)"
+                :key="url"
+                :href="url"
+                target="_blank"
+                rel="noreferrer"
+                class="material-link"
+              >
+                {{ isImage(url) ? '查看图片材料' : `下载 ${fileName(url)}` }}
+              </a>
+            </div>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+      </el-table>
+    </section>
   </section>
 </template>

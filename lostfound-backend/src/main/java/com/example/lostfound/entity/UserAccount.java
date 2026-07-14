@@ -1,14 +1,27 @@
 package com.example.lostfound.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+
 import java.time.LocalDateTime;
 
+@TableName("user_account")
 public class UserAccount {
+    @TableId(type = IdType.AUTO)
     private Long id;
     private String username;
+
+    @TableField("password_hash")
     private String passwordHash;
+
+    @TableField("real_name")
     private String realName;
     private String phone;
     private String role;
+
+    @TableField("created_at")
     private LocalDateTime createdAt;
 
     public Long getId() {

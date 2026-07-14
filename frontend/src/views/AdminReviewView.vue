@@ -1,14 +1,17 @@
 <script setup>
 import { computed, onMounted, reactive } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import http from '../api/http'
-import { claimStatusText } from '../utils/status'
 import { parseUrlList } from '../utils/image'
+import { claimStatusText, tagTypeForClaimStatus } from '../utils/status'
 
 const state = reactive({
   loading: false,
   claims: [],
+  pendingItems: [],
   filterStatus: '',
-  reviewing: false
+  reviewing: false,
+  reviewingItem: false
 })
 
 const pendingClaims = computed(() => state.claims.filter((row) => row.status === 'PENDING'))
@@ -21,27 +24,74 @@ async function loadClaims() {
       params: { status: state.filterStatus || undefined }
     })
   } catch (err) {
-    alert(err.message)
+    ElMessage.error(err.message)
   } finally {
     state.loading = false
   }
 }
 
+async function loadPendingItems() {
+  try {
+    state.pendingItems = await http.get('/admin/items/pending')
+  } catch (err) {
+    ElMessage.error(err.message)
+  }
+}
+
+async function loadAll() {
+  state.loading = true
+  try {
+    await Promise.all([loadClaims(), loadPendingItems()])
+  } finally {
+    state.loading = false
+  }
+}
+
+async function reviewItem(row, status) {
+  const actionText = status === 'OPEN' ? '通过' : '驳回'
+  try {
+    await ElMessageBox.confirm(`确认${actionText}帖子“${row.title}”？`, '审核帖子', {
+      confirmButtonText: actionText,
+      cancelButtonText: '取消',
+      type: status === 'OPEN' ? 'success' : 'warning'
+    })
+  } catch {
+    return
+  }
+
+  state.reviewingItem = true
+  try {
+    await http.put(`/admin/items/${row.id}/review`, { status })
+    ElMessage.success('帖子审核完成')
+    await loadPendingItems()
+  } catch (err) {
+    ElMessage.error(err.message)
+  } finally {
+    state.reviewingItem = false
+  }
+}
+
 async function reviewClaim(row, status) {
-  const note = window.prompt(
-    `请输入${status === 'APPROVED' ? '通过' : '驳回'}备注`,
-    status === 'APPROVED' ? '已核验身份与物品细节，允许认领' : '证明材料不足，请补充后重新提交'
-  )
-  if (note === null) return
+  const actionText = status === 'APPROVED' ? '通过' : '驳回'
+  let note = ''
+  try {
+    const result = await ElMessageBox.prompt(`请输入${actionText}备注`, `审核认领 #${row.id}`, {
+      confirmButtonText: actionText,
+      cancelButtonText: '取消',
+      inputValue: status === 'APPROVED' ? '已核验身份与物品细节，允许认领' : '证明材料不足，请补充后重新提交'
+    })
+    note = result.value
+  } catch {
+    return
+  }
+
   state.reviewing = true
   try {
-    await http.put(`/claims/${row.id}/review`, {
-      status,
-      reviewNote: note
-    })
+    await http.put(`/claims/${row.id}/review`, { status, reviewNote: note })
+    ElMessage.success('审核完成')
     await loadClaims()
   } catch (err) {
-    alert(err.message)
+    ElMessage.error(err.message)
   } finally {
     state.reviewing = false
   }
@@ -63,75 +113,103 @@ function fileName(url) {
   }
 }
 
-onMounted(loadClaims)
+onMounted(loadAll)
 </script>
 
 <template>
-  <section class="grid">
-    <div class="section-title">
+  <section>
+    <div class="page-header">
       <div>
-        <h2>管理员审核模块</h2>
-        <p style="margin:6px 0 0;color:#667085;">管理员审核普通用户提交的认领申请，并可查看审核历史。</p>
+        <h1 class="page-title">认领审核</h1>
+        <p class="page-subtitle">管理员可审核普通用户提交的认领申请，并查看审核历史。</p>
       </div>
-      <button class="btn btn-ghost" @click="loadClaims">刷新</button>
+      <el-button @click="loadAll">
+        <el-icon><Refresh /></el-icon>
+        刷新
+      </el-button>
     </div>
 
-    <section class="grid grid-2">
-      <article class="card">
-        <h3 style="margin-top:0;">待审核</h3>
-        <p style="font-size:30px;font-weight:800;margin:8px 0 0;">{{ pendingClaims.length }}</p>
-      </article>
-      <article class="card">
-        <h3 style="margin-top:0;">审核历史</h3>
-        <p style="font-size:30px;font-weight:800;margin:8px 0 0;">{{ reviewedClaims.length }}</p>
-      </article>
+    <section class="stat-grid">
+      <div class="stat-card">
+        <p class="stat-label">待审核帖子</p>
+        <p class="stat-value">{{ state.pendingItems.length }}</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">待审核</p>
+        <p class="stat-value">{{ pendingClaims.length }}</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">审核历史</p>
+        <p class="stat-value">{{ reviewedClaims.length }}</p>
+      </div>
     </section>
 
-    <section class="card">
-      <div class="section-title">
-        <h3 style="margin:0;">认领申请与审核历史</h3>
-        <select v-model="state.filterStatus" class="select" style="max-width:220px;" @change="loadClaims">
-          <option value="">全部</option>
-          <option value="PENDING">仅待审核</option>
-          <option value="APPROVED">仅已通过</option>
-          <option value="REJECTED">仅已驳回</option>
-        </select>
-      </div>
+    <section class="panel">
+      <el-tabs>
+        <el-tab-pane label="帖子审核">
+          <el-table :data="state.pendingItems" empty-text="暂无待审核帖子" border>
+            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column prop="title" label="标题" min-width="180" />
+            <el-table-column prop="itemType" label="类型" width="110" />
+            <el-table-column prop="category" label="分类" width="120" />
+            <el-table-column prop="location" label="地点" min-width="150" />
+            <el-table-column prop="description" label="描述" min-width="260" show-overflow-tooltip />
+            <el-table-column label="操作" width="170" fixed="right">
+              <template #default="{ row }">
+                <div class="action-row">
+                  <el-button size="small" type="success" :loading="state.reviewingItem" @click="reviewItem(row, 'OPEN')">
+                    通过
+                  </el-button>
+                  <el-button size="small" type="danger" :disabled="state.reviewingItem" @click="reviewItem(row, 'REJECTED')">
+                    驳回
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
 
-      <div v-if="state.loading" class="empty">加载中...</div>
-      <div v-else-if="!state.claims.length" class="empty">暂无认领记录</div>
-      <div v-else class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>认领ID</th>
-              <th>物品</th>
-              <th>认领人</th>
-              <th>认领理由</th>
-              <th>状态</th>
-              <th>审核备注</th>
-              <th>证明材料</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in state.claims" :key="row.id">
-              <td>{{ row.id }}</td>
-              <td>
+        <el-tab-pane label="认领申请">
+          <div class="page-header">
+            <div>
+              <h2 class="page-title" style="font-size: 22px">认领申请</h2>
+              <p class="page-subtitle">按状态筛选后可直接处理待审核记录。</p>
+            </div>
+            <el-select v-model="state.filterStatus" clearable placeholder="全部状态" style="width: 180px" @change="loadClaims">
+              <el-option label="待审核" value="PENDING" />
+              <el-option label="已通过" value="APPROVED" />
+              <el-option label="已驳回" value="REJECTED" />
+            </el-select>
+          </div>
+
+          <el-table v-loading="state.loading" :data="state.claims" empty-text="暂无认领记录" border>
+            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column label="物品" min-width="170">
+              <template #default="{ row }">
                 <div>{{ row.itemTitle || `物品 #${row.itemId}` }}</div>
-                <RouterLink :to="`/items/${row.itemId}`">查看详情</RouterLink>
-              </td>
-              <td>
+                <el-button link type="primary" @click="$router.push(`/items/${row.itemId}`)">查看详情</el-button>
+              </template>
+            </el-table-column>
+            <el-table-column label="认领人" min-width="150">
+              <template #default="{ row }">
                 <div>{{ row.claimantName || `用户 #${row.claimantId}` }}</div>
-                <div style="color:#667085;">{{ row.claimantPhone || '未填写手机号' }}</div>
-              </td>
-              <td>
+                <el-text class="muted">{{ row.claimantPhone || '未填写联系方式' }}</el-text>
+              </template>
+            </el-table-column>
+            <el-table-column label="认领理由" min-width="260">
+              <template #default="{ row }">
                 <div>{{ row.claimReason }}</div>
-                <div style="color:#667085;margin-top:6px;">{{ row.proofDescription || '未填写补充说明' }}</div>
-              </td>
-              <td>{{ claimStatusText(row.status) }}</td>
-              <td>{{ row.reviewNote || '-' }}</td>
-              <td>
+                <el-text class="muted">{{ row.proofDescription || '未填写补充说明' }}</el-text>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="110">
+              <template #default="{ row }">
+                <el-tag :type="tagTypeForClaimStatus(row.status)">{{ claimStatusText(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="reviewNote" label="审核备注" min-width="170" />
+            <el-table-column label="证明材料" min-width="160">
+              <template #default="{ row }">
                 <div v-if="proofMaterials(row).length" class="material-list">
                   <a
                     v-for="url in proofMaterials(row)"
@@ -145,18 +223,24 @@ onMounted(loadClaims)
                   </a>
                 </div>
                 <span v-else>-</span>
-              </td>
-              <td>
-                <div v-if="row.status === 'PENDING'" style="display:flex;gap:8px;flex-wrap:wrap;">
-                  <button class="btn btn-primary" :disabled="state.reviewing" @click="reviewClaim(row, 'APPROVED')">通过</button>
-                  <button class="btn btn-danger" :disabled="state.reviewing" @click="reviewClaim(row, 'REJECTED')">驳回</button>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="170" fixed="right">
+              <template #default="{ row }">
+                <div v-if="row.status === 'PENDING'" class="action-row">
+                  <el-button size="small" type="success" :loading="state.reviewing" @click="reviewClaim(row, 'APPROVED')">
+                    通过
+                  </el-button>
+                  <el-button size="small" type="danger" :disabled="state.reviewing" @click="reviewClaim(row, 'REJECTED')">
+                    驳回
+                  </el-button>
                 </div>
-                <span v-else>已审核</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+                <el-text v-else class="muted">已审核</el-text>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
     </section>
   </section>
 </template>

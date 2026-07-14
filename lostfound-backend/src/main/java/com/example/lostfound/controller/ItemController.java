@@ -4,6 +4,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -47,16 +50,29 @@ public class ItemController {
             @RequestParam(defaultValue = "10") int size) {
         int validPage = Math.max(page, 1);
         int validSize = Math.max(1, Math.min(size, 50));
-        int offset = (validPage - 1) * validSize;
+        String normalizedType = normalizeType(itemType);
 
-        List<LostItem> records = itemMapper.findPage(status, normalizeType(itemType), category, keyword, offset, validSize);
-        long total = itemMapper.count(status, normalizeType(itemType), category, keyword);
+        LambdaQueryWrapper<LostItem> query = Wrappers.<LostItem>lambdaQuery()
+                .eq(hasText(status), LostItem::getStatus, trimToNull(status))
+                .in(!hasText(status), LostItem::getStatus, List.of("OPEN", "MATCHED", "CLOSED"))
+                .eq(hasText(normalizedType), LostItem::getItemType, normalizedType)
+                .eq(hasText(category), LostItem::getCategory, trimToNull(category))
+                .and(hasText(keyword), wrapper -> {
+                    String value = trimToNull(keyword);
+                    wrapper.like(LostItem::getTitle, value)
+                            .or()
+                            .like(LostItem::getDescription, value)
+                            .or()
+                            .like(LostItem::getLocation, value);
+                })
+                .orderByDesc(LostItem::getCreatedAt);
+        Page<LostItem> pageResult = itemMapper.selectPage(new Page<>(validPage, validSize), query);
 
         Map<String, Object> result = new HashMap<>();
-        result.put("total", total);
+        result.put("total", pageResult.getTotal());
         result.put("page", validPage);
         result.put("size", validSize);
-        result.put("records", records);
+        result.put("records", pageResult.getRecords());
         return ApiResponse.success(result);
     }
 
@@ -77,6 +93,9 @@ public class ItemController {
     @LoginRequired
     @PostMapping
     public ApiResponse<LostItem> create(@RequestBody @Valid ItemCreateRequest request) {
+        if ("ADMIN".equals(AuthContext.role())) {
+            throw new BusinessException(403, "Admin cannot publish item posts");
+        }
         LostItem item = new LostItem();
         item.setTitle(request.getTitle());
         item.setDescription(request.getDescription());
@@ -87,7 +106,7 @@ public class ItemController {
         item.setContact(request.getContact());
         item.setItemType(normalizeType(request.getItemType()));
         item.setPublisherId(AuthContext.userId());
-        item.setStatus("OPEN");
+        item.setStatus("PENDING");
         itemMapper.insert(item);
         return ApiResponse.success(itemMapper.findById(item.getId()));
     }
@@ -151,5 +170,17 @@ public class ItemController {
             throw new BusinessException(400, "Item type must be LOST or FOUND");
         }
         return normalized;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

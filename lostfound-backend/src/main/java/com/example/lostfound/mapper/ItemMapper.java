@@ -1,93 +1,59 @@
 package com.example.lostfound.mapper;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.example.lostfound.entity.LostItem;
-import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Options;
-import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
-import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 import java.util.Map;
 
 @Mapper
-public interface ItemMapper {
+public interface ItemMapper extends BaseMapper<LostItem> {
 
-    @Insert("""
-            insert into lost_item(title, description, image_urls, category, location, lost_time, contact, item_type, publisher_id, status)
-            values(#{title}, #{description}, #{imageUrls}, #{category}, #{location}, #{lostTime}, #{contact}, #{itemType}, #{publisherId}, #{status})
-            """)
-    @Options(useGeneratedKeys = true, keyProperty = "id")
-    int insert(LostItem item);
+    default LostItem findById(Long id) {
+        return selectById(id);
+    }
 
-    @Select("select * from lost_item where id = #{id} limit 1")
-    LostItem findById(@Param("id") Long id);
+    default List<LostItem> findByPublisherId(Long publisherId) {
+        return selectList(Wrappers.<LostItem>lambdaQuery()
+                .eq(LostItem::getPublisherId, publisherId)
+                .orderByDesc(LostItem::getCreatedAt));
+    }
 
-    @Select("""
-            <script>
-            select * from lost_item
-            where 1=1
-            <if test="status != null and status != ''">
-                and status = #{status}
-            </if>
-            <if test="itemType != null and itemType != ''">
-                and item_type = #{itemType}
-            </if>
-            <if test="category != null and category != ''">
-                and category = #{category}
-            </if>
-            <if test="keyword != null and keyword != ''">
-                and (title like concat('%', #{keyword}, '%') or description like concat('%', #{keyword}, '%') or location like concat('%', #{keyword}, '%'))
-            </if>
-            order by created_at desc
-            limit #{limit} offset #{offset}
-            </script>
-            """)
-    List<LostItem> findPage(@Param("status") String status,
-                            @Param("itemType") String itemType,
-                            @Param("category") String category,
-                            @Param("keyword") String keyword,
-                            @Param("offset") int offset,
-                            @Param("limit") int limit);
+    default List<LostItem> findByStatus(String status) {
+        return selectList(Wrappers.<LostItem>lambdaQuery()
+                .eq(LostItem::getStatus, status)
+                .orderByDesc(LostItem::getCreatedAt));
+    }
 
-    @Select("""
-            <script>
-            select count(1) from lost_item
-            where 1=1
-            <if test="status != null and status != ''">
-                and status = #{status}
-            </if>
-            <if test="itemType != null and itemType != ''">
-                and item_type = #{itemType}
-            </if>
-            <if test="category != null and category != ''">
-                and category = #{category}
-            </if>
-            <if test="keyword != null and keyword != ''">
-                and (title like concat('%', #{keyword}, '%') or description like concat('%', #{keyword}, '%') or location like concat('%', #{keyword}, '%'))
-            </if>
-            </script>
-            """)
-    long count(@Param("status") String status,
-               @Param("itemType") String itemType,
-               @Param("category") String category,
-               @Param("keyword") String keyword);
+    default List<String> findCategories() {
+        return selectObjs(new QueryWrapper<LostItem>()
+                .select("distinct category")
+                .isNotNull("category")
+                .ne("category", "")
+                .orderByAsc("category"))
+                .stream()
+                .map(String::valueOf)
+                .toList();
+    }
 
-    @Select("select * from lost_item where publisher_id = #{publisherId} order by created_at desc")
-    List<LostItem> findByPublisherId(@Param("publisherId") Long publisherId);
+    default int updateStatus(Long id, String status) {
+        LostItem item = new LostItem();
+        item.setId(id);
+        item.setStatus(status);
+        return updateById(item);
+    }
 
-    @Select("select distinct category from lost_item where category is not null and category != '' order by category")
-    List<String> findCategories();
+    default long countAll() {
+        return selectCount(Wrappers.<LostItem>lambdaQuery());
+    }
 
-    @Update("update lost_item set status = #{status} where id = #{id}")
-    int updateStatus(@Param("id") Long id, @Param("status") String status);
-
-    @Select("select count(1) from lost_item")
-    long countAll();
-
-    @Select("select count(1) from lost_item where status = #{status}")
-    long countByStatus(@Param("status") String status);
+    default long countByStatus(String status) {
+        return selectCount(Wrappers.<LostItem>lambdaQuery().eq(LostItem::getStatus, status));
+    }
 
     @Select("select item_type as name, count(1) as value from lost_item group by item_type")
     List<Map<String, Object>> countByType();

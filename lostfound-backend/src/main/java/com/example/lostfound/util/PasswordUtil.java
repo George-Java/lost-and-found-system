@@ -16,9 +16,18 @@ public class PasswordUtil {
         if (dbPassword == null || dbPassword.isBlank()) {
             return false;
         }
-        if (dbPassword.startsWith("$2a$") || dbPassword.startsWith("$2b$") || dbPassword.startsWith("$2y$")) {
+        if (isBcrypt(dbPassword)) {
             return ENCODER.matches(rawPassword, dbPassword);
         }
         return rawPassword.equals(dbPassword);
+    }
+
+    public static boolean needsRehash(String dbPassword) {
+        return !isBcrypt(dbPassword);
+    }
+
+    public static boolean isBcrypt(String dbPassword) {
+        return dbPassword != null
+                && (dbPassword.startsWith("$2a$") || dbPassword.startsWith("$2b$") || dbPassword.startsWith("$2y$"));
     }
 }

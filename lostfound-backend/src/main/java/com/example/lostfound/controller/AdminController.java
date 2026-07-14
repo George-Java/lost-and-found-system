@@ -4,7 +4,9 @@ import com.example.lostfound.auth.AuthContext;
 import com.example.lostfound.auth.LoginRequired;
 import com.example.lostfound.common.ApiResponse;
 import com.example.lostfound.common.BusinessException;
+import com.example.lostfound.dto.ItemReviewRequest;
 import com.example.lostfound.dto.UserRoleUpdateRequest;
+import com.example.lostfound.entity.LostItem;
 import com.example.lostfound.entity.UserAccount;
 import com.example.lostfound.mapper.ClaimMapper;
 import com.example.lostfound.mapper.ItemMapper;
@@ -41,6 +43,7 @@ public class AdminController {
         Map<String, Object> stats = new HashMap<>();
         stats.put("userCount", userMapper.countAll());
         stats.put("itemCount", itemMapper.countAll());
+        stats.put("pendingItemCount", itemMapper.countByStatus("PENDING"));
         stats.put("openItemCount", itemMapper.countByStatus("OPEN"));
         stats.put("matchedItemCount", itemMapper.countByStatus("MATCHED"));
         stats.put("closedItemCount", itemMapper.countByStatus("CLOSED"));
@@ -56,6 +59,26 @@ public class AdminController {
     @GetMapping("/users")
     public ApiResponse<List<UserAccount>> users() {
         return ApiResponse.success(userMapper.findAll());
+    }
+
+    @GetMapping("/items/pending")
+    public ApiResponse<List<LostItem>> pendingItems() {
+        return ApiResponse.success(itemMapper.findByStatus("PENDING"));
+    }
+
+    @PutMapping("/items/{id}/review")
+    public ApiResponse<Void> reviewItem(@PathVariable Long id, @RequestBody @Valid ItemReviewRequest request) {
+        LostItem item = itemMapper.findById(id);
+        if (item == null) {
+            throw new BusinessException(404, "Item not found");
+        }
+        if (!"PENDING".equals(item.getStatus())) {
+            throw new BusinessException(400, "Only pending item posts can be reviewed");
+        }
+
+        String status = normalizeItemReviewStatus(request.getStatus());
+        itemMapper.updateStatus(id, status);
+        return ApiResponse.success();
     }
 
     @PutMapping("/users/{id}/role")
@@ -77,6 +100,14 @@ public class AdminController {
         String normalized = role.trim().toUpperCase();
         if (!"USER".equals(normalized) && !"ADMIN".equals(normalized)) {
             throw new BusinessException(400, "Role must be USER or ADMIN");
+        }
+        return normalized;
+    }
+
+    private String normalizeItemReviewStatus(String status) {
+        String normalized = status == null ? "" : status.trim().toUpperCase();
+        if (!"OPEN".equals(normalized) && !"REJECTED".equals(normalized)) {
+            throw new BusinessException(400, "Status must be OPEN or REJECTED");
         }
         return normalized;
     }

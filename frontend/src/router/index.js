@@ -8,6 +8,7 @@ import MyItemsView from '../views/MyItemsView.vue'
 import ItemDetailView from '../views/ItemDetailView.vue'
 import AdminDashboardView from '../views/AdminDashboardView.vue'
 import AdminReviewView from '../views/AdminReviewView.vue'
+import MessageView from '../views/MessageView.vue'
 import { useAuthStore } from '../stores/auth'
 
 const router = createRouter({
@@ -20,6 +21,7 @@ const router = createRouter({
     { path: '/items/create', component: CreateItemView, meta: { auth: true } },
     { path: '/items/mine', component: MyItemsView, meta: { auth: true, userOnly: true } },
     { path: '/claims/mine', component: MyClaimsView, meta: { auth: true, userOnly: true } },
+    { path: '/messages', component: MessageView, meta: { auth: true } },
     { path: '/admin', component: AdminDashboardView, meta: { auth: true, admin: true } },
     { path: '/admin/reviews', component: AdminReviewView, meta: { auth: true, admin: true } }
   ]
@@ -30,6 +32,7 @@ router.beforeEach((to) => {
   if (to.meta.auth && !auth.token) return '/login'
   if (to.meta.admin && auth.user?.role !== 'ADMIN') return '/'
   if (to.meta.userOnly && auth.user?.role === 'ADMIN') return '/admin'
+  if (to.path === '/items/create' && auth.user?.role === 'ADMIN') return '/admin/reviews'
   return true
 })
 

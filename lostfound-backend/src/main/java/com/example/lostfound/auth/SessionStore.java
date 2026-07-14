@@ -19,4 +19,10 @@ public class SessionStore {
     public SessionUser get(String token) {
         return tokenStore.get(token);
     }
+
+    public void remove(String token) {
+        if (token != null) {
+            tokenStore.remove(token);
+        }
+    }
 }

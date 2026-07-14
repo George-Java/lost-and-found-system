@@ -17,6 +17,7 @@ import com.example.lostfound.vo.UserSearchVO;
 import com.example.lostfound.vo.UserVO;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -145,6 +146,19 @@ public class UserController {
         if ("APPROVED".equals(status)) {
             userFriendMapper.addFriendPair(friendRequest.getRequesterId(), friendRequest.getReceiverId());
         }
+        return ApiResponse.success();
+    }
+
+    @DeleteMapping("/friends/{friendId}")
+    public ApiResponse<Void> deleteFriend(@PathVariable Long friendId) {
+        Long currentUserId = AuthContext.userId();
+        if (Objects.equals(currentUserId, friendId)) {
+            throw new BusinessException(400, "Cannot delete yourself");
+        }
+        if (!userFriendMapper.areFriends(currentUserId, friendId)) {
+            throw new BusinessException(404, "Friend relationship not found");
+        }
+        userFriendMapper.deleteFriendPair(currentUserId, friendId);
         return ApiResponse.success();
     }
 

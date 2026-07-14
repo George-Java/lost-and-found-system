@@ -75,7 +75,7 @@
 重要列：
 
 - `lost_item.item_type`：`LOST` 或 `FOUND`
-- `lost_item.status`：`PENDING`、`OPEN`、`MATCHED`、`CLOSED`、`REJECTED`
+- `lost_item.status`：`PENDING`、`OPEN`、`MATCHED`、`CLOSED`、`REJECTED`、`DELETED`
 - `lost_item.image_urls`：逗号分隔的图片 URL
 - `claim_record.proof_images`：逗号分隔的证明材料 URL
 - `friend_request`：好友申请记录
@@ -140,10 +140,10 @@ docker compose up -d
 维护者构建并推送镜像示例：
 
 ```bash
-docker build -f lostfound-backend/Dockerfile -t your-registry/lostfound-backend:0.1.0 .
-docker build -f frontend/Dockerfile -t your-registry/lostfound-frontend:0.1.2 .
-docker push your-registry/lostfound-backend:0.1.0
-docker push your-registry/lostfound-frontend:0.1.2
+docker build -f lostfound-backend/Dockerfile -t your-registry/lostfound-backend:0.1.1 .
+docker build -f frontend/Dockerfile -t your-registry/lostfound-frontend:0.1.3 .
+docker push your-registry/lostfound-backend:0.1.1
+docker push your-registry/lostfound-frontend:0.1.3
 ```
 
 ## 演示账户

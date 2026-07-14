@@ -71,6 +71,29 @@ async function reviewItem(row, status) {
   }
 }
 
+async function deleteItem(row) {
+  try {
+    await ElMessageBox.confirm(`确认删除帖子“${row.title}”？`, '删除帖子', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+
+  state.reviewingItem = true
+  try {
+    await http.delete(`/items/${row.id}`)
+    ElMessage.success('帖子已删除')
+    await loadPendingItems()
+  } catch (err) {
+    ElMessage.error(err.message)
+  } finally {
+    state.reviewingItem = false
+  }
+}
+
 async function reviewClaim(row, status) {
   const actionText = status === 'APPROVED' ? '通过' : '驳回'
   let note = ''
@@ -154,7 +177,7 @@ onMounted(loadAll)
             <el-table-column prop="category" label="分类" width="120" />
             <el-table-column prop="location" label="地点" min-width="150" />
             <el-table-column prop="description" label="描述" min-width="260" show-overflow-tooltip />
-            <el-table-column label="操作" width="170" fixed="right">
+            <el-table-column label="操作" width="230" fixed="right">
               <template #default="{ row }">
                 <div class="action-row">
                   <el-button size="small" type="success" :loading="state.reviewingItem" @click="reviewItem(row, 'OPEN')">
@@ -162,6 +185,9 @@ onMounted(loadAll)
                   </el-button>
                   <el-button size="small" type="danger" :disabled="state.reviewingItem" @click="reviewItem(row, 'REJECTED')">
                     驳回
+                  </el-button>
+                  <el-button size="small" type="danger" plain :disabled="state.reviewingItem" @click="deleteItem(row)">
+                    删除
                   </el-button>
                 </div>
               </template>

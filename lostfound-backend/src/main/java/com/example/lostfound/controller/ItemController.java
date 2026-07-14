@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -54,7 +55,8 @@ public class ItemController {
 
         LambdaQueryWrapper<LostItem> query = Wrappers.<LostItem>lambdaQuery()
                 .eq(hasText(status), LostItem::getStatus, trimToNull(status))
-                .in(!hasText(status), LostItem::getStatus, List.of("OPEN", "MATCHED", "CLOSED"))
+                .eq(!hasText(status), LostItem::getStatus, "OPEN")
+                .ne(hasText(status), LostItem::getStatus, "DELETED")
                 .eq(hasText(normalizedType), LostItem::getItemType, normalizedType)
                 .eq(hasText(category), LostItem::getCategory, trimToNull(category))
                 .and(hasText(keyword), wrapper -> {
@@ -84,7 +86,7 @@ public class ItemController {
     @GetMapping("/{id}")
     public ApiResponse<LostItem> detail(@PathVariable Long id) {
         LostItem item = itemMapper.findById(id);
-        if (item == null) {
+        if (item == null || "DELETED".equals(item.getStatus())) {
             throw new BusinessException(404, "Item not found");
         }
         return ApiResponse.success(item);
@@ -121,7 +123,7 @@ public class ItemController {
     @GetMapping("/{id}/claims")
     public ApiResponse<List<ClaimRecord>> claims(@PathVariable Long id) {
         LostItem item = itemMapper.findById(id);
-        if (item == null) {
+        if (item == null || "DELETED".equals(item.getStatus())) {
             throw new BusinessException(404, "Item not found");
         }
         boolean canView = item.getPublisherId().equals(AuthContext.userId()) || "ADMIN".equals(AuthContext.role());
@@ -135,12 +137,15 @@ public class ItemController {
     @PutMapping("/{id}/close")
     public ApiResponse<Void> close(@PathVariable Long id) {
         LostItem item = itemMapper.findById(id);
-        if (item == null) {
+        if (item == null || "DELETED".equals(item.getStatus())) {
             throw new BusinessException(404, "Item not found");
         }
         boolean canOperate = item.getPublisherId().equals(AuthContext.userId()) || "ADMIN".equals(AuthContext.role());
         if (!canOperate) {
             throw new BusinessException(403, "No permission to close this item");
+        }
+        if (!"OPEN".equals(item.getStatus())) {
+            throw new BusinessException(400, "Only open items can be closed");
         }
         itemMapper.updateStatus(id, "CLOSED");
         return ApiResponse.success();
@@ -150,14 +155,32 @@ public class ItemController {
     @PutMapping("/{id}/open")
     public ApiResponse<Void> open(@PathVariable Long id) {
         LostItem item = itemMapper.findById(id);
-        if (item == null) {
+        if (item == null || "DELETED".equals(item.getStatus())) {
             throw new BusinessException(404, "Item not found");
         }
         boolean canOperate = item.getPublisherId().equals(AuthContext.userId()) || "ADMIN".equals(AuthContext.role());
         if (!canOperate) {
             throw new BusinessException(403, "No permission to open this item");
         }
+        if (!"CLOSED".equals(item.getStatus())) {
+            throw new BusinessException(400, "Only closed items can be reopened");
+        }
         itemMapper.updateStatus(id, "OPEN");
+        return ApiResponse.success();
+    }
+
+    @LoginRequired
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> delete(@PathVariable Long id) {
+        LostItem item = itemMapper.findById(id);
+        if (item == null || "DELETED".equals(item.getStatus())) {
+            throw new BusinessException(404, "Item not found");
+        }
+        boolean canOperate = item.getPublisherId().equals(AuthContext.userId()) || "ADMIN".equals(AuthContext.role());
+        if (!canOperate) {
+            throw new BusinessException(403, "No permission to delete this item");
+        }
+        itemMapper.updateStatus(id, "DELETED");
         return ApiResponse.success();
     }
 

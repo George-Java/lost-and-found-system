@@ -22,7 +22,7 @@ services:
       retries: 10
 
   backend:
-    image: carterlucas/lostfound-backend:0.1.0
+    image: carterlucas/lostfound-backend:0.1.1
     container_name: lostfound-backend
     restart: unless-stopped
     depends_on:
@@ -40,7 +40,7 @@ services:
       - "8080"
 
   frontend:
-    image: carterlucas/lostfound-frontend:0.1.2
+    image: carterlucas/lostfound-frontend:0.1.3
 
     container_name: lostfound-frontend
     restart: unless-stopped

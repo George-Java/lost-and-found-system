@@ -118,7 +118,6 @@ onMounted(() => {
         </el-select>
         <el-select v-model="state.status" clearable placeholder="全部状态" style="width: 160px" @change="search">
           <el-option label="开放中" value="OPEN" />
-          <el-option label="已匹配" value="MATCHED" />
           <el-option label="已关闭" value="CLOSED" />
         </el-select>
         <el-select v-model="state.category" clearable filterable placeholder="全部分类" style="width: 180px" @change="search">

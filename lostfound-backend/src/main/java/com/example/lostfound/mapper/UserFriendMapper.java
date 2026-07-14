@@ -39,4 +39,14 @@ public interface UserFriendMapper extends BaseMapper<UserFriend> {
             insert(second);
         }
     }
+
+    default int deleteFriendPair(Long userId, Long friendId) {
+        int first = delete(Wrappers.<UserFriend>lambdaQuery()
+                .eq(UserFriend::getUserId, userId)
+                .eq(UserFriend::getFriendId, friendId));
+        int second = delete(Wrappers.<UserFriend>lambdaQuery()
+                .eq(UserFriend::getUserId, friendId)
+                .eq(UserFriend::getFriendId, userId));
+        return first + second;
+    }
 }

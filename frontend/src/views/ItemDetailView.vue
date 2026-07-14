@@ -47,6 +47,10 @@ const canClaim = computed(() => {
 })
 const canViewClaims = computed(() => auth.user?.role === 'ADMIN')
 const canReviewClaims = computed(() => canViewClaims.value && state.item?.status === 'OPEN')
+const canDeleteItem = computed(() => {
+  if (!state.item || !auth.token) return false
+  return isAdmin.value || auth.user?.userId === state.item.publisherId
+})
 
 async function load() {
   state.loading = true
@@ -133,11 +137,35 @@ async function reviewClaim(row, status) {
   try {
     await http.put(`/claims/${row.id}/review`, { status, reviewNote: note })
     ElMessage.success('审核完成')
+    if (status === 'APPROVED') {
+      router.push('/')
+      return
+    }
     await load()
   } catch (err) {
     ElMessage.error(err.message)
   } finally {
     state.reviewing = false
+  }
+}
+
+async function deleteItem() {
+  try {
+    await ElMessageBox.confirm(`确认删除“${state.item.title}”？`, '删除帖子', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+
+  try {
+    await http.delete(`/items/${state.item.id}`)
+    ElMessage.success('帖子已删除')
+    router.push(isAdmin.value ? '/admin/reviews' : '/items/mine')
+  } catch (err) {
+    ElMessage.error(err.message)
   }
 }
 
@@ -174,7 +202,10 @@ onMounted(load)
           <h1 class="page-title" style="margin-top: 10px">{{ state.item.title }}</h1>
           <p class="page-subtitle">发布于 {{ state.item.createdAt || '-' }}</p>
         </div>
-        <el-button @click="router.push('/')">返回广场</el-button>
+        <div class="action-row">
+          <el-button v-if="canDeleteItem" type="danger" plain @click="deleteItem">删除帖子</el-button>
+          <el-button @click="router.push('/')">返回广场</el-button>
+        </div>
       </div>
 
       <div class="detail-grid">

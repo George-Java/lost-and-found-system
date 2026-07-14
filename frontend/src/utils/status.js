@@ -3,7 +3,8 @@ const ITEM_STATUS_MAP = {
   OPEN: '开放中',
   MATCHED: '已匹配',
   CLOSED: '已关闭',
-  REJECTED: '已驳回'
+  REJECTED: '已驳回',
+  DELETED: '已删除'
 }
 
 const CLAIM_STATUS_MAP = {
@@ -35,7 +36,8 @@ export function tagTypeForItemStatus(status) {
     OPEN: 'success',
     MATCHED: 'warning',
     CLOSED: 'info',
-    REJECTED: 'danger'
+    REJECTED: 'danger',
+    DELETED: 'info'
   }
   return map[status] || 'info'
 }

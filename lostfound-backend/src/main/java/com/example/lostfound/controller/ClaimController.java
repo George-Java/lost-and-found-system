@@ -111,7 +111,7 @@ public class ClaimController {
         claimMapper.review(id, status, AuthContext.userId(), reviewNote, now);
 
         if ("APPROVED".equals(status)) {
-            itemMapper.updateStatus(claim.getItemId(), "MATCHED");
+            itemMapper.updateStatus(claim.getItemId(), "DELETED");
             claimMapper.rejectOthersAfterApproved(claim.getItemId(), id, AuthContext.userId(), "Rejected because another claim was approved", now);
         }
         return ApiResponse.success();

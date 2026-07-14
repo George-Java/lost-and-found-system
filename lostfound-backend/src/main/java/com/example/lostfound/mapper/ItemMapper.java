@@ -20,6 +20,7 @@ public interface ItemMapper extends BaseMapper<LostItem> {
     default List<LostItem> findByPublisherId(Long publisherId) {
         return selectList(Wrappers.<LostItem>lambdaQuery()
                 .eq(LostItem::getPublisherId, publisherId)
+                .ne(LostItem::getStatus, "DELETED")
                 .orderByDesc(LostItem::getCreatedAt));
     }
 
@@ -34,6 +35,7 @@ public interface ItemMapper extends BaseMapper<LostItem> {
                 .select("distinct category")
                 .isNotNull("category")
                 .ne("category", "")
+                .ne("status", "DELETED")
                 .orderByAsc("category"))
                 .stream()
                 .map(String::valueOf)
@@ -48,16 +50,16 @@ public interface ItemMapper extends BaseMapper<LostItem> {
     }
 
     default long countAll() {
-        return selectCount(Wrappers.<LostItem>lambdaQuery());
+        return selectCount(Wrappers.<LostItem>lambdaQuery().ne(LostItem::getStatus, "DELETED"));
     }
 
     default long countByStatus(String status) {
         return selectCount(Wrappers.<LostItem>lambdaQuery().eq(LostItem::getStatus, status));
     }
 
-    @Select("select item_type as name, count(1) as value from lost_item group by item_type")
+    @Select("select item_type as name, count(1) as value from lost_item where status != 'DELETED' group by item_type")
     List<Map<String, Object>> countByType();
 
-    @Select("select category as name, count(1) as value from lost_item where category is not null and category != '' group by category order by value desc limit 8")
+    @Select("select category as name, count(1) as value from lost_item where status != 'DELETED' and category is not null and category != '' group by category order by value desc limit 8")
     List<Map<String, Object>> countByCategory();
 }

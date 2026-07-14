@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import http from '../api/http'
 import { createMessageSocketUrl } from '../api/ws'
 import { useAuthStore } from '../stores/auth'
@@ -94,6 +94,30 @@ async function reviewFriendRequest(request, status) {
     await http.put(`/users/friend-requests/${request.id}/review`, { status })
     ElMessage.success(status === 'APPROVED' ? '已同意好友申请' : '已拒绝好友申请')
     await Promise.all([loadContacts(), loadFriendRequests()])
+  } catch (err) {
+    ElMessage.error(err.message)
+  }
+}
+
+async function deleteFriend(contact) {
+  try {
+    await ElMessageBox.confirm(`确认删除好友“${contact.realName || contact.username}”？`, '删除好友', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+
+  try {
+    await http.delete(`/users/friends/${contact.id}`)
+    ElMessage.success('好友已删除')
+    state.messages = state.messages.filter((message) => message.fromUserId !== contact.id && message.toUserId !== contact.id)
+    await loadContacts()
+    if (state.searchKeyword.trim().length >= 2) {
+      await searchUsers()
+    }
   } catch (err) {
     ElMessage.error(err.message)
   }
@@ -218,7 +242,15 @@ onBeforeUnmount(disconnect)
             <el-menu v-else :default-active="String(state.activeUserId)" @select="(id) => (state.activeUserId = Number(id))">
               <el-menu-item v-for="contact in state.contacts" :key="contact.id" :index="String(contact.id)">
                 <el-icon><User /></el-icon>
-                <span>{{ contact.realName || contact.username }}（{{ contact.role }}）</span>
+                <span style="flex: 1">{{ contact.realName || contact.username }}（{{ contact.role }}）</span>
+                <el-button
+                  size="small"
+                  type="danger"
+                  text
+                  @click.stop="deleteFriend(contact)"
+                >
+                  删除
+                </el-button>
               </el-menu-item>
             </el-menu>
           </el-tab-pane>

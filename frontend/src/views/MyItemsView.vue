@@ -42,6 +42,29 @@ async function updateStatus(id, action) {
   }
 }
 
+async function deleteItem(item) {
+  try {
+    await ElMessageBox.confirm(`确认删除“${item.title}”？删除后将不再显示在广场和我的发布中。`, '删除帖子', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+
+  state.operating = true
+  try {
+    await http.delete(`/items/${item.id}`)
+    ElMessage.success('帖子已删除')
+    await load()
+  } catch (err) {
+    ElMessage.error(err.message)
+  } finally {
+    state.operating = false
+  }
+}
+
 function firstImage(item) {
   return parseUrlList(item.imageUrls)[0] || ''
 }
@@ -54,7 +77,7 @@ onMounted(load)
     <div class="page-header">
       <div>
         <h1 class="page-title">我发布的物品</h1>
-        <p class="page-subtitle">管理自己发布的寻物或招领信息，可关闭或重新开放。</p>
+        <p class="page-subtitle">管理自己发布的寻物或招领信息，可关闭、重新开放或删除。</p>
       </div>
       <el-button type="primary" @click="$router.push('/items/create')">
         <el-icon><Plus /></el-icon>
@@ -79,7 +102,7 @@ onMounted(load)
             <div class="action-row">
               <el-button type="primary" plain @click="$router.push(`/items/${item.id}`)">详情</el-button>
               <el-button
-                v-if="item.status !== 'CLOSED'"
+                v-if="item.status === 'OPEN'"
                 type="danger"
                 plain
                 :loading="state.operating"
@@ -88,13 +111,20 @@ onMounted(load)
                 关闭
               </el-button>
               <el-button
-                v-else
+                v-if="item.status === 'CLOSED'"
                 type="success"
                 plain
                 :loading="state.operating"
                 @click="updateStatus(item.id, 'open')"
               >
                 重新开放
+              </el-button>
+              <el-button
+                type="danger"
+                :loading="state.operating"
+                @click="deleteItem(item)"
+              >
+                删除
               </el-button>
             </div>
           </div>

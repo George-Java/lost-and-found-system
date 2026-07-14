@@ -48,7 +48,6 @@ CREATE TABLE `claim_record` (
 
 LOCK TABLES `claim_record` WRITE;
 /*!40000 ALTER TABLE `claim_record` DISABLE KEYS */;
-INSERT INTO `claim_record` VALUES (1,3,3,'就是我的，没有理由','无',NULL,'APPROVED',1,'已核验身份与物品细节，允许认领','2026-07-14 20:13:44','2026-07-14 20:13:56');
 /*!40000 ALTER TABLE `claim_record` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -117,7 +116,7 @@ CREATE TABLE `lost_item` (
 
 LOCK TABLES `lost_item` WRITE;
 /*!40000 ALTER TABLE `lost_item` DISABLE KEYS */;
-INSERT INTO `lost_item` VALUES (1,'蓝色钱包','一个蓝色的钱包，内含学生卡。',NULL,'钱包','图书馆门口','2026-04-10 14:30:00','微信:user02','FOUND',3,'DELETED','2026-07-14 18:54:49','2026-07-14 22:21:59'),(2,'黑色耳机','黑色小盒子装的无线耳机。',NULL,'数码产品','食堂二楼','2026-04-08 12:00:00','电话:18811111111','LOST',2,'DELETED','2026-07-14 18:54:49','2026-07-14 22:18:37'),(3,'图书馆内捡到的蓝牙耳机','黑色蓝牙耳机，牌子是索尼，入耳式耳机','https://imgservice.suning.cn/uimg1/b2c/image/ouIEua35jp9sToV0KCA6ig.jpg_800w_800h_4e','数码产品','图书馆一楼102室32号桌面上','2026-05-06 22:18:00','13945074310','FOUND',2,'OPEN','2026-07-14 22:20:37','2026-07-14 22:21:21'),(4,'六食堂丢失的iPhone手机','iPhone 16Pro Max白色，存储是512GB，贴有钢化膜，左上角钢化膜有小面积碎裂，锁屏壁纸是一只熊猫，手机壳是透明磁吸手机壳，手机掉漆比较严重。','https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSoxKZH9VioiYgJ4gHhgainMlIOKKNhyAJFuv1OC8F4jw&s=10','数码产品','六食堂西半区某餐桌','2026-06-05 12:02:00','14781650432','LOST',3,'OPEN','2026-07-14 22:27:53','2026-07-14 22:28:00');
+INSERT INTO `lost_item` VALUES (1,'图书馆内捡到的蓝牙耳机','黑色蓝牙耳机，牌子是索尼，入耳式耳机','https://imgservice.suning.cn/uimg1/b2c/image/ouIEua35jp9sToV0KCA6ig.jpg_800w_800h_4e','数码产品','图书馆一楼102室32号桌面上','2026-05-06 22:18:00','13945074310','FOUND',2,'OPEN','2026-07-14 22:20:37','2026-07-14 22:21:21'),(2,'六食堂丢失的iPhone手机','iPhone 16Pro Max白色，存储是512GB，贴有钢化膜，左上角钢化膜有小面积碎裂，锁屏壁纸是一只熊猫，手机壳是透明磁吸手机壳，手机掉漆比较严重。','https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSoxKZH9VioiYgJ4gHhgainMlIOKKNhyAJFuv1OC8F4jw&s=10','数码产品','六食堂西半区某餐桌','2026-06-05 12:02:00','14781650432','LOST',3,'OPEN','2026-07-14 22:27:53','2026-07-14 22:28:00');
 /*!40000 ALTER TABLE `lost_item` ENABLE KEYS */;
 UNLOCK TABLES;
 

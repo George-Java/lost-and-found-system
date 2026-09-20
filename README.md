@@ -117,34 +117,58 @@ Vite 开发环境已代理 `/api`、`/uploads` 和 `/ws` 到 `http://localhost:8
 
 ## Docker 打包与运行
 
-项目提供了：
+项目采用**单镜像**部署方案，一个容器内同时运行 Nginx（前端 + 反向代理）和 Spring Boot（后端），使用宿主机本地 MySQL 数据库。
 
-- 后端镜像构建文件：`lostfound-backend/Dockerfile`
-- 前端镜像构建文件：`frontend/Dockerfile`
-- 前端容器 Nginx 配置：`frontend/nginx.conf`
-- 一键编排：`docker-compose.yml`
+### 前置条件
 
-使用远程镜像一键运行：
+- 宿主机已安装并运行 MySQL 8+，默认连接 `127.0.0.1:3306`
+- 在宿主机 MySQL 中执行 `sql/lostfound.sql` 初始化数据库
+- Docker 环境（Docker Desktop 或 Linux Docker Engine）
+
+### 构建镜像
 
 ```bash
-docker compose pull
+docker build -t lostfound:latest .
+```
+
+### 启动容器
+
+```bash
 docker compose up -d
 ```
 
-访问：
-
-- 前端：http://localhost
-- 后端通过前端 Nginx 代理访问 `/api`
+容器使用 `network_mode: host` 直接共享宿主机网络，因此：
+- 前端访问：http://localhost
+- 后端 API 通过 Nginx 代理到 `/api`
 - WebSocket 通过 `/ws/messages` 代理到后端
 
-维护者构建并推送镜像示例：
+### 数据库连接
+
+如需修改数据库连接信息，编辑 `docker-compose.yml` 中的环境变量：
+
+- `SPRING_DATASOURCE_URL`：JDBC 连接串（默认连接宿主机 `127.0.0.1:3306`）
+- `SPRING_DATASOURCE_USERNAME`：数据库用户名（默认 `root`）
+- `SPRING_DATASOURCE_PASSWORD`：数据库密码（默认 `123456`）
+
+### 镜像推送（可选）
 
 ```bash
-docker build -f lostfound-backend/Dockerfile -t your-registry/lostfound-backend:0.1.1 .
-docker build -f frontend/Dockerfile -t your-registry/lostfound-frontend:0.1.3 .
-docker push your-registry/lostfound-backend:0.1.1
-docker push your-registry/lostfound-frontend:0.1.3
+docker tag lostfound:latest your-registry/lostfound:latest
+docker push your-registry/lostfound:latest
 ```
+
+### WSL / Linux 注意事项
+
+- **MySQL 绑定地址**：确保宿主机 MySQL 监听 `0.0.0.0` 而非仅 `127.0.0.1`。编辑 MySQL 配置 `bind-address = 0.0.0.0`。
+- **网络模式**：`network_mode: host` 在原生 Linux Docker 上直接共享宿主机网络栈；在 Docker Desktop（Windows/Mac）中行为不同，可能需要改用端口映射 + `extra_hosts` 方式。
+- 如果在 WSL2 + Docker Desktop 下 `network_mode: host` 无法访问宿主机 MySQL，可将 `docker-compose.yml` 中的 `network_mode: host` 替换为：
+  ```yaml
+  ports:
+    - "80:80"
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  ```
+  并将 `SPRING_DATASOURCE_URL` 中的 `127.0.0.1` 改为 `host.docker.internal`。
 
 ## 演示账户
 

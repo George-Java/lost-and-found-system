@@ -16,12 +16,12 @@ public class AuthContext {
 
     public static Long userId() {
         SessionUser user = CURRENT.get();
-        return user == null ? null : user.getUserId();
+        return user == null ? null : user.userId();
     }
 
     public static String role() {
         SessionUser user = CURRENT.get();
-        return user == null ? null : user.getRole();
+        return user == null ? null : user.role();
     }
 
     public static void clear() {

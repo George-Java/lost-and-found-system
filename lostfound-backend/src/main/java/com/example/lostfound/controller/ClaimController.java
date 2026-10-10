@@ -1,15 +1,15 @@
 package com.example.lostfound.controller;
 
 import com.example.lostfound.auth.AuthContext;
-import com.example.lostfound.auth.LoginRequired;
 import com.example.lostfound.common.ApiResponse;
 import com.example.lostfound.common.BusinessException;
-import com.example.lostfound.dto.ClaimCreateRequest;
-import com.example.lostfound.dto.ClaimReviewRequest;
-import com.example.lostfound.entity.ClaimRecord;
-import com.example.lostfound.entity.LostItem;
-import com.example.lostfound.mapper.ClaimMapper;
-import com.example.lostfound.mapper.ItemMapper;
+import com.example.lostfound.domain.dto.ClaimCreateRequest;
+import com.example.lostfound.domain.dto.ClaimReviewRequest;
+import com.example.lostfound.domain.entity.ClaimRecord;
+import com.example.lostfound.domain.entity.LostItem;
+import com.example.lostfound.service.ClaimReviewService;
+import com.example.lostfound.service.ClaimService;
+import com.example.lostfound.service.ItemService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,25 +20,21 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDateTime;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/claims")
+@RequiredArgsConstructor
 public class ClaimController {
 
-    private final ClaimMapper claimMapper;
-    private final ItemMapper itemMapper;
+    private final ClaimService claimService;
+    private final ItemService itemService;
+    private final ClaimReviewService claimReviewService;
 
-    public ClaimController(ClaimMapper claimMapper, ItemMapper itemMapper) {
-        this.claimMapper = claimMapper;
-        this.itemMapper = itemMapper;
-    }
-
-    @LoginRequired
     @PostMapping
     public ApiResponse<ClaimRecord> create(@RequestBody @Valid ClaimCreateRequest request) {
-        LostItem item = itemMapper.findById(request.getItemId());
+        LostItem item = itemService.getById(request.itemId());
         if (item == null) {
             throw new BusinessException(404, "Item not found");
         }
@@ -52,68 +48,44 @@ public class ClaimController {
             throw new BusinessException(400, "Publisher cannot claim own item");
         }
 
-        ClaimRecord pending = claimMapper.findPendingByItemAndClaimant(item.getId(), AuthContext.userId());
+        ClaimRecord pending = claimService.findPendingByItemAndClaimant(item.getId(), AuthContext.userId());
         if (pending != null) {
             throw new BusinessException(409, "You already submitted a pending claim");
         }
 
         ClaimRecord record = new ClaimRecord();
-        record.setItemId(request.getItemId());
+        record.setItemId(request.itemId());
         record.setClaimantId(AuthContext.userId());
-        record.setClaimReason(request.getClaimReason().trim());
-        record.setProofDescription(trimToNull(request.getProofDescription()));
-        record.setProofMaterials(trimToNull(request.getProofMaterials()));
+        record.setClaimReason(request.claimReason().trim());
+        record.setProofDescription(trimToNull(request.proofDescription()));
+        record.setProofMaterials(trimToNull(request.proofMaterials()));
         record.setStatus("PENDING");
-        claimMapper.insert(record);
-        return ApiResponse.success(claimMapper.findById(record.getId()));
+        claimService.save(record);
+        return ApiResponse.success(claimService.findDetail(record.getId()));
     }
 
-    @LoginRequired
     @GetMapping("/mine")
     public ApiResponse<List<ClaimRecord>> mine() {
-        return ApiResponse.success(claimMapper.findByClaimantId(AuthContext.userId()));
+        return ApiResponse.success(claimService.findByClaimantId(AuthContext.userId()));
     }
 
-    @LoginRequired(adminOnly = true)
     @GetMapping
     public ApiResponse<List<ClaimRecord>> list(@RequestParam(required = false) String status) {
-        return ApiResponse.success(claimMapper.findList(normalizeStatus(status, true)));
+        return ApiResponse.success(claimService.findList(normalizeStatus(status, true)));
     }
 
-    @LoginRequired(adminOnly = true)
     @GetMapping("/pending")
     public ApiResponse<List<ClaimRecord>> pending() {
-        return ApiResponse.success(claimMapper.findList("PENDING"));
+        return ApiResponse.success(claimService.findList("PENDING"));
     }
 
-    @LoginRequired(adminOnly = true)
     @PutMapping("/{id}/review")
     public ApiResponse<Void> review(@PathVariable Long id, @RequestBody @Valid ClaimReviewRequest request) {
-        ClaimRecord claim = claimMapper.findById(id);
-        if (claim == null) {
-            throw new BusinessException(404, "Claim not found");
-        }
-        if (!"PENDING".equals(claim.getStatus())) {
-            throw new BusinessException(400, "Claim has already been reviewed");
-        }
-
-        LostItem item = itemMapper.findById(claim.getItemId());
-        if (item == null) {
-            throw new BusinessException(404, "Item not found");
-        }
-        String status = normalizeStatus(request.getStatus(), false);
+        String status = normalizeStatus(request.status(), false);
         if ("PENDING".equals(status)) {
             throw new BusinessException(400, "Review status must be APPROVED or REJECTED");
         }
-
-        LocalDateTime now = LocalDateTime.now();
-        String reviewNote = trimToNull(request.getReviewNote());
-        claimMapper.review(id, status, AuthContext.userId(), reviewNote, now);
-
-        if ("APPROVED".equals(status)) {
-            itemMapper.updateStatus(claim.getItemId(), "DELETED");
-            claimMapper.rejectOthersAfterApproved(claim.getItemId(), id, AuthContext.userId(), "Rejected because another claim was approved", now);
-        }
+        claimReviewService.review(id, status, AuthContext.userId(), trimToNull(request.reviewNote()));
         return ApiResponse.success();
     }
 

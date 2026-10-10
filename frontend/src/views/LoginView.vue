@@ -24,8 +24,6 @@ async function submit() {
     auth.setLogin(data)
     ElMessage.success('登录成功')
     router.push(data.role === 'ADMIN' ? '/admin' : '/')
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     loading.value = false
   }

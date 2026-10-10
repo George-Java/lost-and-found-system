@@ -11,8 +11,6 @@ async function load() {
   state.loading = true
   try {
     state.records = await http.get('/items/mine')
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     state.loading = false
   }
@@ -35,8 +33,6 @@ async function updateStatus(id, action) {
     await http.put(`/items/${id}/${action}`)
     ElMessage.success('操作成功')
     await load()
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     state.operating = false
   }
@@ -58,8 +54,6 @@ async function deleteItem(item) {
     await http.delete(`/items/${item.id}`)
     ElMessage.success('帖子已删除')
     await load()
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     state.operating = false
   }

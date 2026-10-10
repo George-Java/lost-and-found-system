@@ -1,25 +1,93 @@
 server:
   port: 8080
+  forward-headers-strategy: framework
+  tomcat:
+    threads:
+      max: ${SERVER_TOMCAT_THREADS_MAX:120}
+      min-spare: ${SERVER_TOMCAT_THREADS_MIN_SPARE:20}
+    max-connections: ${SERVER_TOMCAT_MAX_CONNECTIONS:2000}
+    accept-count: ${SERVER_TOMCAT_ACCEPT_COUNT:200}
 
+# 本机开发默认连 CentOS 虚拟机 192.168.68.128 上的 MySQL、Redis 与 RabbitMQ。
+# 生产用 docker compose 的环境变量覆盖，见 .env.example 与 DEPLOYMENT.md。
 spring:
   main:
     allow-bean-definition-overriding: true
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/lostfound?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://192.168.68.128:3306/lostfound?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
     username: ${SPRING_DATASOURCE_USERNAME:root}
     password: ${SPRING_DATASOURCE_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:30}
+      minimum-idle: ${DB_POOL_MIN_IDLE:8}
+      connection-timeout: 3000
+      validation-timeout: 1000
+      max-lifetime: 1700000
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:192.168.68.128}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:123456}
+      timeout: 2s
+      lettuce:
+        pool:
+          max-active: 24
+          max-idle: 12
+          min-idle: 4
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:192.168.68.128}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:root}
+    password: ${SPRING_RABBITMQ_PASSWORD:123456}
+    virtual-host: ${SPRING_RABBITMQ_VIRTUAL_HOST:/}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    listener:
+      simple:
+        acknowledge-mode: auto
+        concurrency: 1
+        max-concurrency: 3
+        prefetch: 10
   servlet:
     multipart:
       max-file-size: 10MB
       max-request-size: 20MB
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
 mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
   configuration:
     map-underscore-to-camel-case: true
-    lazy-loading-enabled: true
+    lazy-loading-enabled: false
   global-config:
     banner: false
 
 lostfound:
   upload-dir: ${LOSTFOUND_UPLOAD_DIR:uploads}
+  session:
+    ttl: ${LOSTFOUND_SESSION_TTL:12h}
+  # 两级缓存：Caffeine(进程内) -> Redis -> MySQL
+  cache:
+    ttl: ${LOSTFOUND_CACHE_TTL:10m}
+    local-max-size: ${LOSTFOUND_CACHE_LOCAL_MAX_SIZE:10000}
+  # Canal：订阅 MySQL binlog，数据库一变更就清理两级缓存
+  # 与旧项目共用 11111 上的 heima 实例（一个 canal-server 只能配一套实例参数），
+  # 服务端 filter.regex 同时覆盖 redis_cache 与 lostfound，客户端只订阅本项目的库。
+  canal:
+    enabled: ${LOSTFOUND_CANAL_ENABLED:true}
+    host: ${LOSTFOUND_CANAL_HOST:192.168.68.128}
+    port: ${LOSTFOUND_CANAL_PORT:11111}
+    destination: ${LOSTFOUND_CANAL_DESTINATION:heima}
+    filter: ${LOSTFOUND_CANAL_FILTER:lostfound\..*}
+    batch-size: ${LOSTFOUND_CANAL_BATCH_SIZE:100}

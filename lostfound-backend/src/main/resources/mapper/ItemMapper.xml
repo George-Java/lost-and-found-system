@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.lostfound.mapper.ItemMapper">
+
+    <sql id="itemColumns">
+        id, title, description, image_urls, category, location, lost_time, contact,
+        item_type, publisher_id, status, created_at, updated_at
+    </sql>
+
+    <!-- 列表分页：不带 status 时默认只看 OPEN，带 status 时排除已删除 -->
+    <select id="selectItemPage" resultType="com.example.lostfound.domain.entity.LostItem">
+        select
+        <include refid="itemColumns"/>
+        from lost_item
+        <where>
+            <choose>
+                <when test="status != null and status != ''">
+                    status = #{status} and status != 'DELETED'
+                </when>
+                <otherwise>
+                    status = 'OPEN'
+                </otherwise>
+            </choose>
+            <if test="itemType != null and itemType != ''">
+                and item_type = #{itemType}
+            </if>
+            <if test="category != null and category != ''">
+                and category = #{category}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                and (
+                    title like concat('%', #{keyword}, '%')
+                    or description like concat('%', #{keyword}, '%')
+                    or location like concat('%', #{keyword}, '%')
+                )
+            </if>
+        </where>
+        order by created_at desc
+    </select>
+
+    <select id="selectCategories" resultType="java.lang.String">
+        select distinct category
+        from lost_item
+        where category is not null and category != '' and status != 'DELETED'
+        order by category
+    </select>
+
+    <select id="countByType" resultType="java.util.Map">
+        select item_type as name, count(1) as value
+        from lost_item
+        where status != 'DELETED'
+        group by item_type
+    </select>
+
+    <select id="countByCategory" resultType="java.util.Map">
+        select category as name, count(1) as value
+        from lost_item
+        where status != 'DELETED' and category is not null and category != ''
+        group by category
+        order by value desc
+        limit 8
+    </select>
+
+</mapper>

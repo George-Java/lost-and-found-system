@@ -17,4 +17,11 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }
 
+// 请求失败的提示已由 api/http.js 的拦截器统一弹出，这里避免浏览器再打印一遍未处理的 Promise 异常
+window.addEventListener('unhandledrejection', (event) => {
+  if (event.reason?.notified) {
+    event.preventDefault()
+  }
+})
+
 app.mount('#app')

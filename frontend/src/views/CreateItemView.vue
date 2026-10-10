@@ -47,8 +47,6 @@ async function submit() {
     })
     ElMessage.success('发布成功，等待管理员审核')
     router.push(`/items/${created.id}`)
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     state.submitting = false
   }
@@ -65,7 +63,6 @@ async function uploadImage(option) {
     form.imageUrls.push(uploaded.url)
     option.onSuccess(uploaded)
   } catch (err) {
-    ElMessage.error(err.message)
     option.onError(err)
   } finally {
     state.uploading = false

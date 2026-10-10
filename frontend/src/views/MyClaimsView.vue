@@ -1,6 +1,5 @@
 <script setup>
 import { onMounted, reactive } from 'vue'
-import { ElMessage } from 'element-plus'
 import http from '../api/http'
 import { parseUrlList } from '../utils/image'
 import { claimStatusText, tagTypeForClaimStatus } from '../utils/status'
@@ -11,8 +10,6 @@ async function load() {
   state.loading = true
   try {
     state.records = await http.get('/claims/mine')
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     state.loading = false
   }

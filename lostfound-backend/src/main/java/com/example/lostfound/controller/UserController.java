@@ -1,20 +1,19 @@
 package com.example.lostfound.controller;
 
 import com.example.lostfound.auth.AuthContext;
-import com.example.lostfound.auth.LoginRequired;
 import com.example.lostfound.common.ApiResponse;
 import com.example.lostfound.common.BusinessException;
-import com.example.lostfound.dto.FriendRequestCreateRequest;
-import com.example.lostfound.dto.FriendRequestReviewRequest;
-import com.example.lostfound.entity.FriendRequest;
-import com.example.lostfound.mapper.UserMapper;
-import com.example.lostfound.mapper.FriendRequestMapper;
-import com.example.lostfound.mapper.UserFriendMapper;
-import com.example.lostfound.entity.UserAccount;
-import com.example.lostfound.entity.UserFriend;
-import com.example.lostfound.vo.FriendRequestVO;
-import com.example.lostfound.vo.UserSearchVO;
-import com.example.lostfound.vo.UserVO;
+import com.example.lostfound.domain.dto.FriendRequestCreateRequest;
+import com.example.lostfound.domain.dto.FriendRequestReviewRequest;
+import com.example.lostfound.domain.entity.FriendRequest;
+import com.example.lostfound.domain.entity.UserAccount;
+import com.example.lostfound.domain.entity.UserFriend;
+import com.example.lostfound.service.FriendRequestService;
+import com.example.lostfound.service.UserFriendService;
+import com.example.lostfound.service.UserService;
+import com.example.lostfound.domain.vo.FriendRequestVO;
+import com.example.lostfound.domain.vo.UserSearchVO;
+import com.example.lostfound.domain.vo.UserVO;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -30,30 +29,23 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/users")
-@LoginRequired
+@RequiredArgsConstructor
 public class UserController {
 
-    private final UserMapper userMapper;
-    private final UserFriendMapper userFriendMapper;
-    private final FriendRequestMapper friendRequestMapper;
-
-    public UserController(UserMapper userMapper,
-                          UserFriendMapper userFriendMapper,
-                          FriendRequestMapper friendRequestMapper) {
-        this.userMapper = userMapper;
-        this.userFriendMapper = userFriendMapper;
-        this.friendRequestMapper = friendRequestMapper;
-    }
+    private final UserService userService;
+    private final UserFriendService userFriendService;
+    private final FriendRequestService friendRequestService;
 
     @GetMapping("/contacts")
     public ApiResponse<List<UserVO>> contacts() {
         Long currentUserId = AuthContext.userId();
-        List<UserVO> users = userFriendMapper.findByUserId(currentUserId).stream()
+        List<UserVO> users = userFriendService.findByUserId(currentUserId).stream()
                 .map(UserFriend::getFriendId)
-                .map(userMapper::findById)
+                .map(userService::findById)
                 .filter(Objects::nonNull)
                 .map(this::toUserVO)
                 .toList();
@@ -67,7 +59,7 @@ public class UserController {
             throw new BusinessException(400, "Search keyword must be at least 2 characters");
         }
         Long currentUserId = AuthContext.userId();
-        List<UserSearchVO> users = userMapper.search(trimmed).stream()
+        List<UserSearchVO> users = userService.search(trimmed).stream()
                 .filter(user -> !Objects.equals(user.getId(), currentUserId))
                 .map(user -> new UserSearchVO(
                         user.getId(),
@@ -84,21 +76,21 @@ public class UserController {
     @PostMapping("/friend-requests")
     public ApiResponse<FriendRequestVO> createFriendRequest(@RequestBody @Valid FriendRequestCreateRequest request) {
         Long currentUserId = AuthContext.userId();
-        Long targetUserId = request.getTargetUserId();
+        Long targetUserId = request.targetUserId();
         if (Objects.equals(currentUserId, targetUserId)) {
             throw new BusinessException(400, "Cannot add yourself as friend");
         }
-        UserAccount target = userMapper.findById(targetUserId);
+        UserAccount target = userService.findById(targetUserId);
         if (target == null) {
             throw new BusinessException(404, "Target user not found");
         }
-        if (userFriendMapper.areFriends(currentUserId, targetUserId)) {
+        if (userFriendService.areFriends(currentUserId, targetUserId)) {
             throw new BusinessException(409, "You are already friends");
         }
-        if (friendRequestMapper.findPending(currentUserId, targetUserId) != null) {
+        if (friendRequestService.findPending(currentUserId, targetUserId) != null) {
             throw new BusinessException(409, "Friend request already sent");
         }
-        FriendRequest reverse = friendRequestMapper.findPending(targetUserId, currentUserId);
+        FriendRequest reverse = friendRequestService.findPending(targetUserId, currentUserId);
         if (reverse != null) {
             throw new BusinessException(409, "This user has already sent you a pending friend request");
         }
@@ -107,20 +99,20 @@ public class UserController {
         requestEntity.setRequesterId(currentUserId);
         requestEntity.setReceiverId(targetUserId);
         requestEntity.setStatus("PENDING");
-        friendRequestMapper.insert(requestEntity);
+        friendRequestService.save(requestEntity);
         return ApiResponse.success(toFriendRequestVO(requestEntity));
     }
 
     @GetMapping("/friend-requests/incoming")
     public ApiResponse<List<FriendRequestVO>> incomingRequests() {
-        return ApiResponse.success(friendRequestMapper.findIncoming(AuthContext.userId()).stream()
+        return ApiResponse.success(friendRequestService.findIncoming(AuthContext.userId()).stream()
                 .map(this::toFriendRequestVO)
                 .toList());
     }
 
     @GetMapping("/friend-requests/outgoing")
     public ApiResponse<List<FriendRequestVO>> outgoingRequests() {
-        return ApiResponse.success(friendRequestMapper.findOutgoing(AuthContext.userId()).stream()
+        return ApiResponse.success(friendRequestService.findOutgoing(AuthContext.userId()).stream()
                 .map(this::toFriendRequestVO)
                 .toList());
     }
@@ -128,7 +120,7 @@ public class UserController {
     @PutMapping("/friend-requests/{id}/review")
     public ApiResponse<Void> reviewFriendRequest(@PathVariable Long id,
                                                  @RequestBody @Valid FriendRequestReviewRequest request) {
-        FriendRequest friendRequest = friendRequestMapper.selectById(id);
+        FriendRequest friendRequest = friendRequestService.getById(id);
         if (friendRequest == null) {
             throw new BusinessException(404, "Friend request not found");
         }
@@ -139,12 +131,12 @@ public class UserController {
             throw new BusinessException(400, "Friend request has already been reviewed");
         }
 
-        String status = normalizeFriendRequestStatus(request.getStatus());
+        String status = normalizeFriendRequestStatus(request.status());
         friendRequest.setStatus(status);
         friendRequest.setReviewedAt(LocalDateTime.now());
-        friendRequestMapper.updateById(friendRequest);
+        friendRequestService.updateById(friendRequest);
         if ("APPROVED".equals(status)) {
-            userFriendMapper.addFriendPair(friendRequest.getRequesterId(), friendRequest.getReceiverId());
+            userFriendService.addFriendPair(friendRequest.getRequesterId(), friendRequest.getReceiverId());
         }
         return ApiResponse.success();
     }
@@ -155,21 +147,21 @@ public class UserController {
         if (Objects.equals(currentUserId, friendId)) {
             throw new BusinessException(400, "Cannot delete yourself");
         }
-        if (!userFriendMapper.areFriends(currentUserId, friendId)) {
+        if (!userFriendService.areFriends(currentUserId, friendId)) {
             throw new BusinessException(404, "Friend relationship not found");
         }
-        userFriendMapper.deleteFriendPair(currentUserId, friendId);
+        userFriendService.deleteFriendPair(currentUserId, friendId);
         return ApiResponse.success();
     }
 
     private String friendshipStatus(Long currentUserId, Long targetUserId) {
-        if (userFriendMapper.areFriends(currentUserId, targetUserId)) {
+        if (userFriendService.areFriends(currentUserId, targetUserId)) {
             return "FRIEND";
         }
-        if (friendRequestMapper.findPending(currentUserId, targetUserId) != null) {
+        if (friendRequestService.findPending(currentUserId, targetUserId) != null) {
             return "REQUEST_SENT";
         }
-        if (friendRequestMapper.findPending(targetUserId, currentUserId) != null) {
+        if (friendRequestService.findPending(targetUserId, currentUserId) != null) {
             return "REQUEST_RECEIVED";
         }
         return "NONE";
@@ -178,8 +170,8 @@ public class UserController {
     private FriendRequestVO toFriendRequestVO(FriendRequest friendRequest) {
         return new FriendRequestVO(
                 friendRequest.getId(),
-                Optional.ofNullable(userMapper.findById(friendRequest.getRequesterId())).map(this::toUserVO).orElse(null),
-                Optional.ofNullable(userMapper.findById(friendRequest.getReceiverId())).map(this::toUserVO).orElse(null),
+                Optional.ofNullable(userService.findById(friendRequest.getRequesterId())).map(this::toUserVO).orElse(null),
+                Optional.ofNullable(userService.findById(friendRequest.getReceiverId())).map(this::toUserVO).orElse(null),
                 friendRequest.getStatus(),
                 friendRequest.getCreatedAt(),
                 friendRequest.getReviewedAt()

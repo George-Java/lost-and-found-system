@@ -22,8 +22,6 @@ async function loadAll() {
   state.loading = true
   try {
     await Promise.all([loadStats(), loadUsers()])
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     state.loading = false
   }
@@ -46,8 +44,6 @@ async function updateRole(user, role) {
     await http.put(`/admin/users/${user.id}/role`, { role })
     ElMessage.success('角色已更新')
     await loadUsers()
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     state.updatingRole = false
   }

@@ -62,7 +62,7 @@ async function load() {
       state.itemClaims = []
     }
   } catch (err) {
-    ElMessage.error(err.message)
+    // 提示已由拦截器统一处理，这里只需要退回列表
     router.push('/')
   } finally {
     state.loading = false
@@ -80,7 +80,6 @@ async function uploadProofMaterial(option) {
     state.claimForm.proofMaterials.push(uploaded.url)
     option.onSuccess(uploaded)
   } catch (err) {
-    ElMessage.error(err.message)
     option.onError(err)
   } finally {
     state.uploading = false
@@ -112,8 +111,6 @@ async function submitClaim() {
     if (canViewClaims.value) {
       state.itemClaims = await http.get(`/items/${route.params.id}/claims`)
     }
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     state.submitting = false
   }
@@ -142,8 +139,6 @@ async function reviewClaim(row, status) {
       return
     }
     await load()
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     state.reviewing = false
   }
@@ -160,13 +155,10 @@ async function deleteItem() {
     return
   }
 
-  try {
-    await http.delete(`/items/${state.item.id}`)
-    ElMessage.success('帖子已删除')
-    router.push(isAdmin.value ? '/admin/reviews' : '/items/mine')
-  } catch (err) {
-    ElMessage.error(err.message)
-  }
+  const target = isAdmin.value ? '/admin/reviews' : '/items/mine'
+  await http.delete(`/items/${state.item.id}`)
+  ElMessage.success('帖子已删除')
+  router.push(target)
 }
 
 function proofMaterials(row) {

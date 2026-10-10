@@ -1,6 +1,5 @@
 package com.example.lostfound.controller;
 
-import com.example.lostfound.auth.LoginRequired;
 import com.example.lostfound.common.ApiResponse;
 import com.example.lostfound.common.BusinessException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,11 +34,11 @@ public class FileController {
 
     private final String uploadDir;
 
+    /** 上传目录来自配置项，带 @Value 的构造器不能用 Lombok 生成，这里保留手写。 */
     public FileController(@Value("${lostfound.upload-dir:uploads}") String uploadDir) {
         this.uploadDir = uploadDir;
     }
 
-    @LoginRequired
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<Map<String, String>> upload(@RequestPart("file") MultipartFile file, HttpServletRequest request) {
         String extension = validate(file);

@@ -23,19 +23,13 @@ async function loadClaims() {
     state.claims = await http.get('/claims', {
       params: { status: state.filterStatus || undefined }
     })
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     state.loading = false
   }
 }
 
 async function loadPendingItems() {
-  try {
-    state.pendingItems = await http.get('/admin/items/pending')
-  } catch (err) {
-    ElMessage.error(err.message)
-  }
+  state.pendingItems = await http.get('/admin/items/pending')
 }
 
 async function loadAll() {
@@ -64,8 +58,6 @@ async function reviewItem(row, status) {
     await http.put(`/admin/items/${row.id}/review`, { status })
     ElMessage.success('帖子审核完成')
     await loadPendingItems()
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     state.reviewingItem = false
   }
@@ -87,8 +79,6 @@ async function deleteItem(row) {
     await http.delete(`/items/${row.id}`)
     ElMessage.success('帖子已删除')
     await loadPendingItems()
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     state.reviewingItem = false
   }
@@ -113,8 +103,6 @@ async function reviewClaim(row, status) {
     await http.put(`/claims/${row.id}/review`, { status, reviewNote: note })
     ElMessage.success('审核完成')
     await loadClaims()
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     state.reviewing = false
   }

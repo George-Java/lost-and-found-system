@@ -4,17 +4,93 @@ services:
       context: .
       dockerfile: Dockerfile
     image: lostfound:latest
-    container_name: lostfound
+    container_name: lostfound-app
     restart: unless-stopped
-    network_mode: host
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "${HTTP_PORT:-80}:80"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/lostfound?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: 123456
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/lostfound?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-lostfound}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-lostfound}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
       LOSTFOUND_UPLOAD_DIR: /app/uploads
       TZ: Asia/Shanghai
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=40 -Dfile.encoding=UTF-8"
     volumes:
       - uploads-data:/app/uploads
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/actuator/health | grep -q 'UP'"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  mysql:
+    image: mysql:8.4
+    container_name: lostfound-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: lostfound
+      MYSQL_USER: ${MYSQL_USER:-lostfound}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      TZ: Asia/Shanghai
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./sql/lostfound.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./sql/production-indexes.sql:/docker-entrypoint-initdb.d/02-indexes.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: lostfound-redis
+    restart: unless-stopped
+    command: ["sh", "-c", "redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: lostfound-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-lostfound}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
 volumes:
+  mysql-data:
+  redis-data:
+  rabbitmq-data:
   uploads-data:

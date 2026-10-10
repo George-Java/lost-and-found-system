@@ -1,65 +1,33 @@
 package com.example.lostfound.mapper;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import com.example.lostfound.entity.LostItem;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.example.lostfound.domain.entity.LostItem;
 import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 物品表 Mapper：简单增删改查由 ServiceImpl 提供，复杂查询写在 resources/mapper/ItemMapper.xml。
+ */
 @Mapper
 public interface ItemMapper extends BaseMapper<LostItem> {
 
-    default LostItem findById(Long id) {
-        return selectById(id);
-    }
+    /** 带动态条件的列表分页查询。 */
+    IPage<LostItem> selectItemPage(IPage<LostItem> page,
+                                   @Param("status") String status,
+                                   @Param("itemType") String itemType,
+                                   @Param("category") String category,
+                                   @Param("keyword") String keyword);
 
-    default List<LostItem> findByPublisherId(Long publisherId) {
-        return selectList(Wrappers.<LostItem>lambdaQuery()
-                .eq(LostItem::getPublisherId, publisherId)
-                .ne(LostItem::getStatus, "DELETED")
-                .orderByDesc(LostItem::getCreatedAt));
-    }
+    /** 所有已发布帖子的分类。 */
+    List<String> selectCategories();
 
-    default List<LostItem> findByStatus(String status) {
-        return selectList(Wrappers.<LostItem>lambdaQuery()
-                .eq(LostItem::getStatus, status)
-                .orderByDesc(LostItem::getCreatedAt));
-    }
-
-    default List<String> findCategories() {
-        return selectObjs(new QueryWrapper<LostItem>()
-                .select("distinct category")
-                .isNotNull("category")
-                .ne("category", "")
-                .ne("status", "DELETED")
-                .orderByAsc("category"))
-                .stream()
-                .map(String::valueOf)
-                .toList();
-    }
-
-    default int updateStatus(Long id, String status) {
-        LostItem item = new LostItem();
-        item.setId(id);
-        item.setStatus(status);
-        return updateById(item);
-    }
-
-    default long countAll() {
-        return selectCount(Wrappers.<LostItem>lambdaQuery().ne(LostItem::getStatus, "DELETED"));
-    }
-
-    default long countByStatus(String status) {
-        return selectCount(Wrappers.<LostItem>lambdaQuery().eq(LostItem::getStatus, status));
-    }
-
-    @Select("select item_type as name, count(1) as value from lost_item where status != 'DELETED' group by item_type")
+    /** 后台统计：按物品类型分组计数。 */
     List<Map<String, Object>> countByType();
 
-    @Select("select category as name, count(1) as value from lost_item where status != 'DELETED' and category is not null and category != '' group by category order by value desc limit 8")
+    /** 后台统计：按分类分组计数，取前 8。 */
     List<Map<String, Object>> countByCategory();
 }

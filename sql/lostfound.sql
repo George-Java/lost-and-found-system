@@ -16,6 +16,36 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
+-- Table structure for table `chat_message`
+--
+
+DROP TABLE IF EXISTS `chat_message`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `chat_message` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `from_user_id` bigint NOT NULL,
+  `to_user_id` bigint NOT NULL,
+  `content` varchar(500) COLLATE utf8mb4_general_ci NOT NULL,
+  `sent_at` datetime(3) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_chat_from_to_sent` (`from_user_id`,`to_user_id`,`sent_at`),
+  KEY `idx_chat_to_from_sent` (`to_user_id`,`from_user_id`,`sent_at`),
+  CONSTRAINT `fk_chat_from_user` FOREIGN KEY (`from_user_id`) REFERENCES `user_account` (`id`),
+  CONSTRAINT `fk_chat_to_user` FOREIGN KEY (`to_user_id`) REFERENCES `user_account` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `chat_message`
+--
+
+LOCK TABLES `chat_message` WRITE;
+/*!40000 ALTER TABLE `chat_message` DISABLE KEYS */;
+/*!40000 ALTER TABLE `chat_message` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `claim_record`
 --
 

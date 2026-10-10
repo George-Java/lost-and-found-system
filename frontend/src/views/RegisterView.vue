@@ -28,8 +28,6 @@ async function submit() {
     await http.post('/auth/register', form)
     ElMessage.success('注册成功，请登录')
     router.push('/login')
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     loading.value = false
   }

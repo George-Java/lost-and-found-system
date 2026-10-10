@@ -1,16 +1,15 @@
 package com.example.lostfound.controller;
 
 import com.example.lostfound.auth.AuthContext;
-import com.example.lostfound.auth.LoginRequired;
 import com.example.lostfound.common.ApiResponse;
 import com.example.lostfound.common.BusinessException;
-import com.example.lostfound.dto.ItemReviewRequest;
-import com.example.lostfound.dto.UserRoleUpdateRequest;
-import com.example.lostfound.entity.LostItem;
-import com.example.lostfound.entity.UserAccount;
-import com.example.lostfound.mapper.ClaimMapper;
-import com.example.lostfound.mapper.ItemMapper;
-import com.example.lostfound.mapper.UserMapper;
+import com.example.lostfound.domain.dto.ItemReviewRequest;
+import com.example.lostfound.domain.dto.UserRoleUpdateRequest;
+import com.example.lostfound.domain.entity.LostItem;
+import com.example.lostfound.domain.entity.UserAccount;
+import com.example.lostfound.service.ClaimService;
+import com.example.lostfound.service.ItemService;
+import com.example.lostfound.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,53 +21,48 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/admin")
-@LoginRequired(adminOnly = true)
+@RequiredArgsConstructor
 public class AdminController {
 
-    private final ItemMapper itemMapper;
-    private final ClaimMapper claimMapper;
-    private final UserMapper userMapper;
-
-    public AdminController(ItemMapper itemMapper, ClaimMapper claimMapper, UserMapper userMapper) {
-        this.itemMapper = itemMapper;
-        this.claimMapper = claimMapper;
-        this.userMapper = userMapper;
-    }
+    private final ItemService itemService;
+    private final ClaimService claimService;
+    private final UserService userService;
 
     @GetMapping("/stats")
     public ApiResponse<Map<String, Object>> stats() {
         Map<String, Object> stats = new HashMap<>();
-        stats.put("userCount", userMapper.countAll());
-        stats.put("itemCount", itemMapper.countAll());
-        stats.put("pendingItemCount", itemMapper.countByStatus("PENDING"));
-        stats.put("openItemCount", itemMapper.countByStatus("OPEN"));
-        stats.put("matchedItemCount", itemMapper.countByStatus("MATCHED"));
-        stats.put("closedItemCount", itemMapper.countByStatus("CLOSED"));
-        stats.put("claimCount", claimMapper.countAll());
-        stats.put("pendingClaimCount", claimMapper.countByStatus("PENDING"));
-        stats.put("approvedClaimCount", claimMapper.countByStatus("APPROVED"));
-        stats.put("rejectedClaimCount", claimMapper.countByStatus("REJECTED"));
-        stats.put("typeStats", itemMapper.countByType());
-        stats.put("categoryStats", itemMapper.countByCategory());
+        stats.put("userCount", userService.countAll());
+        stats.put("itemCount", itemService.countAll());
+        stats.put("pendingItemCount", itemService.countByStatus("PENDING"));
+        stats.put("openItemCount", itemService.countByStatus("OPEN"));
+        stats.put("matchedItemCount", itemService.countByStatus("MATCHED"));
+        stats.put("closedItemCount", itemService.countByStatus("CLOSED"));
+        stats.put("claimCount", claimService.countAll());
+        stats.put("pendingClaimCount", claimService.countByStatus("PENDING"));
+        stats.put("approvedClaimCount", claimService.countByStatus("APPROVED"));
+        stats.put("rejectedClaimCount", claimService.countByStatus("REJECTED"));
+        stats.put("typeStats", itemService.countByType());
+        stats.put("categoryStats", itemService.countByCategory());
         return ApiResponse.success(stats);
     }
 
     @GetMapping("/users")
     public ApiResponse<List<UserAccount>> users() {
-        return ApiResponse.success(userMapper.findAll());
+        return ApiResponse.success(userService.findAll());
     }
 
     @GetMapping("/items/pending")
     public ApiResponse<List<LostItem>> pendingItems() {
-        return ApiResponse.success(itemMapper.findByStatus("PENDING"));
+        return ApiResponse.success(itemService.findByStatus("PENDING"));
     }
 
     @PutMapping("/items/{id}/review")
     public ApiResponse<Void> reviewItem(@PathVariable Long id, @RequestBody @Valid ItemReviewRequest request) {
-        LostItem item = itemMapper.findById(id);
+        LostItem item = itemService.getById(id);
         if (item == null) {
             throw new BusinessException(404, "Item not found");
         }
@@ -76,14 +70,14 @@ public class AdminController {
             throw new BusinessException(400, "Only pending item posts can be reviewed");
         }
 
-        String status = normalizeItemReviewStatus(request.getStatus());
-        itemMapper.updateStatus(id, status);
+        String status = normalizeItemReviewStatus(request.status());
+        itemService.updateStatus(id, status);
         return ApiResponse.success();
     }
 
     @PutMapping("/users/{id}/role")
     public ApiResponse<Void> updateRole(@PathVariable Long id, @RequestBody @Valid UserRoleUpdateRequest request) {
-        UserAccount target = userMapper.findById(id);
+        UserAccount target = userService.findById(id);
         if (target == null) {
             throw new BusinessException(404, "User not found");
         }
@@ -91,8 +85,8 @@ public class AdminController {
             throw new BusinessException(400, "Admin cannot change own role");
         }
 
-        String role = normalizeRole(request.getRole());
-        userMapper.updateRole(id, role);
+        String role = normalizeRole(request.role());
+        userService.updateRole(id, role);
         return ApiResponse.success();
     }
 

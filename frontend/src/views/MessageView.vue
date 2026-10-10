@@ -18,6 +18,7 @@ const state = reactive({
   activeUserId: null,
   socket: null,
   connected: false,
+  sending: false,
   messageText: '',
   messages: []
 })
@@ -25,13 +26,30 @@ const state = reactive({
 const activeContact = computed(() => state.contacts.find((item) => item.id === state.activeUserId))
 const activeMessages = computed(() => {
   const currentUserId = auth.user?.userId
-  return state.messages.filter((message) => {
-    return (
-      (message.fromUserId === currentUserId && message.toUserId === state.activeUserId)
-      || (message.fromUserId === state.activeUserId && message.toUserId === currentUserId)
-    )
-  })
+  return state.messages
+    .filter((message) => {
+      return (
+        (message.fromUserId === currentUserId && message.toUserId === state.activeUserId)
+        || (message.fromUserId === state.activeUserId && message.toUserId === currentUserId)
+      )
+    })
+    .slice()
+    .sort((a, b) => String(a.sentAt).localeCompare(String(b.sentAt)) || (a.id || 0) - (b.id || 0))
 })
+
+// 同一消息可能既来自历史接口又来自 WebSocket 推送，按 id 去重
+function addMessage(message) {
+  if (message.id && state.messages.some((item) => item.id === message.id)) {
+    return
+  }
+  state.messages.push(message)
+}
+
+async function loadHistory(friendId) {
+  if (!friendId) return
+  const history = await http.get('/messages', { params: { friendId, limit: 200 } })
+  history.forEach(addMessage)
+}
 
 async function loadContacts() {
   state.loading = true
@@ -43,24 +61,18 @@ async function loadContacts() {
     if (state.activeUserId && !state.contacts.some((item) => item.id === state.activeUserId)) {
       state.activeUserId = state.contacts[0]?.id || null
     }
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     state.loading = false
   }
 }
 
 async function loadFriendRequests() {
-  try {
-    const [incoming, outgoing] = await Promise.all([
-      http.get('/users/friend-requests/incoming'),
-      http.get('/users/friend-requests/outgoing')
-    ])
-    state.incomingRequests = incoming
-    state.outgoingRequests = outgoing
-  } catch (err) {
-    ElMessage.error(err.message)
-  }
+  const [incoming, outgoing] = await Promise.all([
+    http.get('/users/friend-requests/incoming'),
+    http.get('/users/friend-requests/outgoing')
+  ])
+  state.incomingRequests = incoming
+  state.outgoingRequests = outgoing
 }
 
 async function searchUsers() {
@@ -72,31 +84,21 @@ async function searchUsers() {
   state.searching = true
   try {
     state.searchResults = await http.get('/users/search', { params: { keyword } })
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     state.searching = false
   }
 }
 
 async function sendFriendRequest(user) {
-  try {
-    await http.post('/users/friend-requests', { targetUserId: user.id })
-    ElMessage.success('好友申请已发送')
-    await Promise.all([searchUsers(), loadFriendRequests()])
-  } catch (err) {
-    ElMessage.error(err.message)
-  }
+  await http.post('/users/friend-requests', { targetUserId: user.id })
+  ElMessage.success('好友申请已发送')
+  await Promise.all([searchUsers(), loadFriendRequests()])
 }
 
 async function reviewFriendRequest(request, status) {
-  try {
-    await http.put(`/users/friend-requests/${request.id}/review`, { status })
-    ElMessage.success(status === 'APPROVED' ? '已同意好友申请' : '已拒绝好友申请')
-    await Promise.all([loadContacts(), loadFriendRequests()])
-  } catch (err) {
-    ElMessage.error(err.message)
-  }
+  await http.put(`/users/friend-requests/${request.id}/review`, { status })
+  ElMessage.success(status === 'APPROVED' ? '已同意好友申请' : '已拒绝好友申请')
+  await Promise.all([loadContacts(), loadFriendRequests()])
 }
 
 async function deleteFriend(contact) {
@@ -110,21 +112,20 @@ async function deleteFriend(contact) {
     return
   }
 
-  try {
-    await http.delete(`/users/friends/${contact.id}`)
-    ElMessage.success('好友已删除')
-    state.messages = state.messages.filter((message) => message.fromUserId !== contact.id && message.toUserId !== contact.id)
-    await loadContacts()
-    if (state.searchKeyword.trim().length >= 2) {
-      await searchUsers()
-    }
-  } catch (err) {
-    ElMessage.error(err.message)
+  await http.delete(`/users/friends/${contact.id}`)
+  ElMessage.success('好友已删除')
+  state.messages = state.messages.filter((message) => message.fromUserId !== contact.id && message.toUserId !== contact.id)
+  await loadContacts()
+  if (state.searchKeyword.trim().length >= 2) {
+    await searchUsers()
   }
 }
 
+let reconnectTimer = null
+let unmounted = false
+
 function connect() {
-  if (!auth.token || state.socket) return
+  if (!auth.token || state.socket || unmounted) return
   const socket = new WebSocket(createMessageSocketUrl(auth.token))
   state.socket = socket
 
@@ -134,19 +135,21 @@ function connect() {
   socket.onclose = () => {
     state.connected = false
     state.socket = null
+    // 断线自动重连：重连成功即开始接收离线期间积压在消息队列里的私信
+    if (unmounted || reconnectTimer) return
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null
+      connect()
+    }, 5000)
   }
   socket.onerror = () => {
-    ElMessage.error('消息连接异常')
+    state.connected = false
   }
   socket.onmessage = (event) => {
     try {
       const payload = JSON.parse(event.data)
-      if (payload.type === 'ERROR') {
-        ElMessage.warning(payload.message)
-        return
-      }
       if (payload.type === 'CHAT') {
-        state.messages.push(payload)
+        addMessage(payload)
       }
     } catch {
       ElMessage.warning('收到无法解析的消息')
@@ -155,12 +158,16 @@ function connect() {
 }
 
 function disconnect() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
   if (state.socket) {
     state.socket.close()
   }
 }
 
-function sendMessage() {
+async function sendMessage() {
   const content = state.messageText.trim()
   if (!content) {
     ElMessage.warning('请输入消息内容')
@@ -170,13 +177,16 @@ function sendMessage() {
     ElMessage.warning('请选择好友')
     return
   }
-  if (!state.connected || !state.socket) {
-    ElMessage.warning('消息连接尚未建立')
-    return
-  }
 
-  state.socket.send(JSON.stringify({ toUserId: state.activeUserId, content }))
-  state.messageText = ''
+  state.sending = true
+  try {
+    // 发送走 HTTP：后端先落库再推送，对方不在线时消息也不会丢
+    const message = await http.post('/messages', { toUserId: state.activeUserId, content })
+    addMessage(message)
+    state.messageText = ''
+  } finally {
+    state.sending = false
+  }
 }
 
 function senderName(message) {
@@ -196,6 +206,14 @@ function friendshipLabel(status) {
   return map[status] || status
 }
 
+function formatTime(sentAt) {
+  return String(sentAt || '').replace('T', ' ').slice(0, 16)
+}
+
+watch(() => state.activeUserId, (id) => {
+  if (id) loadHistory(id)
+})
+
 watch(activeMessages, async () => {
   await nextTick()
   if (listRef.value) {
@@ -209,7 +227,10 @@ onMounted(() => {
   connect()
 })
 
-onBeforeUnmount(disconnect)
+onBeforeUnmount(() => {
+  unmounted = true
+  disconnect()
+})
 </script>
 
 <template>
@@ -217,10 +238,10 @@ onBeforeUnmount(disconnect)
     <div class="page-header">
       <div>
         <h1 class="page-title">用户消息</h1>
-        <p class="page-subtitle">先搜索用户并发送好友申请，对方同意后才能进行 WebSocket 实时通信。</p>
+        <p class="page-subtitle">先搜索用户并发送好友申请，对方同意后才能收发消息。私信会保存在服务端：对方在线时实时送达，不在线则登录后即可看到全部历史消息。</p>
       </div>
-      <el-tag :type="state.connected ? 'success' : 'danger'">
-        {{ state.connected ? '已连接' : '未连接' }}
+      <el-tag :type="state.connected ? 'success' : 'warning'">
+        {{ state.connected ? '实时接收中' : '实时推送断开' }}
       </el-tag>
     </div>
 
@@ -329,14 +350,14 @@ onBeforeUnmount(disconnect)
         </template>
 
         <div ref="listRef" class="message-list">
-          <el-empty v-if="!activeMessages.length" description="暂无消息" />
+          <el-empty v-if="!activeMessages.length" description="暂无消息记录" />
           <div
             v-for="(message, index) in activeMessages"
             :key="`${message.sentAt}-${index}`"
             class="message-bubble"
             :class="{ mine: message.fromUserId === auth.user?.userId }"
           >
-            <div class="message-meta">{{ senderName(message) }} · {{ message.sentAt }}</div>
+            <div class="message-meta">{{ senderName(message) }} · {{ formatTime(message.sentAt) }}</div>
             <div>{{ message.content }}</div>
           </div>
         </div>
@@ -351,7 +372,7 @@ onBeforeUnmount(disconnect)
             placeholder="输入消息内容"
             @keydown.ctrl.enter.prevent="sendMessage"
           />
-          <el-button type="primary" :disabled="!state.connected || !state.activeUserId" @click="sendMessage">
+          <el-button type="primary" :disabled="!state.activeUserId" :loading="state.sending" @click="sendMessage">
             <el-icon><Promotion /></el-icon>
             发送
           </el-button>

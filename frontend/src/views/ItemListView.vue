@@ -1,6 +1,5 @@
 <script setup>
 import { computed, onMounted, reactive } from 'vue'
-import { ElMessage } from 'element-plus'
 import http from '../api/http'
 import { useAuthStore } from '../stores/auth'
 import { parseUrlList } from '../utils/image'
@@ -37,8 +36,6 @@ async function load() {
     })
     state.total = data.total
     state.records = data.records
-  } catch (err) {
-    ElMessage.error(err.message)
   } finally {
     state.loading = false
   }
